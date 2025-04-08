@@ -1,0 +1,215 @@
+---
+title: "Renewables"
+author: "Lucy Wang"
+date: "2025-04-08"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r packages, warning=FALSE, message=FALSE}
+library(lubridate)
+library(ggplot2)
+library(forecast)  
+library(Kendall)
+library(tseries)
+library(outliers)
+library(tidyverse)
+library(smooth)
+library(zoo)
+library(kableExtra)
+```
+
+```{r data file}
+renewable_data <- read.csv(
+  file="./Data/IEA_MonthlyElectricityProduction_1224.csv",
+  header=TRUE,
+  skip=8) %>% 
+  filter(Country=="Germany") %>% 
+  filter(Product == "Total Renewables (Hydro, Geo, Solar, Wind, Other)") %>% 
+  mutate(Time = my(Time) ) %>% 
+  arrange(Time) %>% 
+  filter(Time>="2019-01-01")
+```
+
+## Import data file 
+
+You can also embed plots, for example:
+
+```{r , echo=FALSE}
+renewable_ts <- msts(renewable_data$Value, start = c(2019,1), seasonal.periods = c(12))
+```
+
+## Initial Plots
+
+```{r}
+renewable_ts_plot <- 
+  autoplot(renewable_ts) +
+      theme_minimal()
+plot(renewable_ts_plot)
+
+#ACF and PACF plots
+par(mfrow=c(1,2))
+ACF_Plot <- Acf(renewable_ts, lag = 40, plot = TRUE,main="")
+PACF_Plot <- Pacf(renewable_ts, lag = 40, plot = TRUE,main="")
+par(mfrow=c(1,1))
+```
+
+```{r, message=FALSE, warning=FALSE}
+#create a subset for training purpose
+n_for = 6
+ts_renewable_train <- subset(renewable_ts,
+                                   end = length(renewable_ts)-n_for)
+
+#create a subset for testing purpose
+ts_renewable_test <- subset(renewable_ts,
+                                   start = length(renewable_ts)-n_for)
+
+autoplot(ts_renewable_train)
+autoplot(ts_renewable_test)
+```
+
+### Model 1: STL + ETS
+
+```{r ETS, echo=TRUE, message=FALSE, warning=FALSE}
+#Fit and forecast STL + ETS model to data
+ETS_fit <-  stlf(ts_renewable_train,h=6)
+
+#Plot foresting results
+autoplot(ETS_fit) + ylab("Generation")
+
+#Plot model + observed data
+autoplot(renewable_ts) +
+  autolayer(ETS_fit, series="STL + ETS",PI=FALSE) +
+  ylab("Generation")
+
+#alternative coding if you don't need to save the objects
+#ts_act_power_daily_train %>% stlf(h=365) %>% autoplot() 
+#very easy to read/run/implement 
+#but you don't have anything stored on your environment
+
+```
+
+
+### Model 2: ARIMA + FOURIER terms
+
+Since we have multiple seasonalities, the SARIMA model will not work.
+But we can work with an ARIMA model with Fourier terms for each seasonal period.
+This models is known as a dynamic harmonic regression model with an ARMA error structure.
+We will use a log transformation (`lambda=0`) in the `auto.arima()` to ensure the forecasts and prediction intervals remain positive.
+And for the fourier terms we will use function `fourier()` from package `forecast`.
+The number of fourier terms needed is specified in argument `K=`.
+K should be a vector of integers specifying the number of sine and cosine terms for each of the seasonal periods.
+Ideally K is chosen to minimize the AICc, but we will not go over it.
+
+Fourier terms are used to model the seasonal components.
+It resembles the seasonal dummies we used in previous modules, but they are based on trigonometric functions.
+More info on fourier terms [here](https://otexts.com/fpp2/useful-predictors.html#useful-predictors).
+
+```{r ARIMA, echo=TRUE, message=FALSE, warning=FALSE}
+#Fit arima model with fourier terms as exogenous regressors
+# seasonal = FALSE is the same as P=D=Q=0
+# play with K by changing it to K=c(2,2), K=c(2,4), K=c(2,6), etc. The higher teh K the longer it will take to converge, because R will try more models.
+
+ARIMA_Four_fit <- auto.arima(ts_renewable_train, 
+                             seasonal=FALSE, 
+                             lambda=0,
+                             xreg=fourier(ts_renewable_train, 
+                                          K=c(2))
+                             )
+
+#Forecast with ARIMA fit
+#also need to specify h for fourier terms
+ARIMA_Four_for <- forecast(ARIMA_Four_fit,
+                           xreg=fourier(ts_renewable_train,
+                                        K=c(2),
+                                        h=6),
+                           h=6
+                           ) 
+
+#Plot foresting results
+autoplot(ARIMA_Four_for) + ylab("Generation")
+
+#Plot model + observed data
+autoplot(renewable_ts) +
+  autolayer(ARIMA_Four_for, series="ARIMA_FOURIER",PI=FALSE) +
+  ylab("Generation")
+
+```
+
+### Model 3: TBATS
+
+BATS is Exponential smoothing state space model with **B**ox-Cox transformation, **A**RMA errors, **T**rend and **S**easonal components.
+TBATS is a trigonometric seasonal variation of BATS.
+A Box Cox transformation is a transformation of non-normal dependent variables into a normal shape.
+
+More info on BATS and TBATS with corresponding equations [here](https://forecasters.org/wp-content/uploads/gravity_forms/7-2a51b93047891f1ec3608bdbd77ca58d/2014/06/Blaconá_MT_ISF2014.pdf.pdf).
+
+```{r TBATS, echo=TRUE, message=FALSE, warning=FALSE}
+# TBATS can take time to fit
+TBATS_fit <- tbats(ts_renewable_train)
+
+TBATS_for <- forecast(TBATS_fit, h=6)
+
+#Plot foresting results
+autoplot(TBATS_for) +
+  ylab("Generation") 
+
+#Plot model + observed data
+autoplot(renewable_ts) +
+  autolayer(TBATS_for, series="TBATS",PI=FALSE)+
+  ylab("Generation") 
+
+```
+
+### Model 4: Neural Network Time Series Forecasts
+
+There is a function in package `forecast` called `nnetar()` that will fit a feed-forward neural networks model to a time series.
+
+A feed-forward neural network is fitted with lagged values of the series as inputs.
+The inputs are for lags 1 to p, and lags s to sP where `s=frequency(y)`.
+If xreg is provided, its columns are also used as inputs.
+The network is trained for one-step forecasting.
+Multi-step forecasts are computed recursively.
+
+For non-seasonal data, the fitted model is denoted as an NNAR(p,k) model, where k is the number of hidden nodes.
+This is analogous to an AR(p) model but with nonlinear functions.
+For seasonal data, the fitted model is called an NNAR(p,P,k)[m] model, which is analogous to an ARIMA(p,0,0)(P,0,0)[s] model but with nonlinear functions.
+
+```{r NNETAR, echo=TRUE, message=FALSE, warning=FALSE}
+#You can play with the different values for p and P, you can also use xreg with Fourier term to model the multiple seasonality
+
+#NN_fit <- nnetar(ts_act_power_daily_train,p=1,P=1)
+NN_fit <- nnetar(ts_act_power_daily_train,
+                 p=1,
+                 P=0,
+                 xreg=fourier(ts_act_power_daily_train, K=c(2,12)))
+
+#NN_for <- forecast(NN_fit, h=365) 
+NN_for <- forecast(NN_fit, 
+                   h=365,
+                   xreg=fourier(ts_act_power_daily_train, 
+                                          K=c(2,12),h=365))
+
+
+#Plot foresting results
+autoplot(NN_for) +
+  ylab("Active Power") 
+
+
+#Plot model + observed data
+autoplot(ts_act_power_daily) +
+  autolayer(NN_for, series="Neural Network",PI=FALSE)+
+  ylab("Active Power") 
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
