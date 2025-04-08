@@ -37,7 +37,7 @@ renewable_data <- read.csv(
   filter(Product == "Total Renewables (Hydro, Geo, Solar, Wind, Other)") %>% 
   mutate(Time = my(Time) ) %>% 
   arrange(Time) %>% 
-  filter(Time>="2019-01-01")
+  filter(Time>="2010-01-01")
 ```
 
 ## Import data file 
@@ -45,8 +45,13 @@ renewable_data <- read.csv(
 You can also embed plots, for example:
 
 ```{r , echo=FALSE}
-renewable_ts <- msts(renewable_data$Value, start = c(2019,1), seasonal.periods = c(12))
+renewable_ts <- msts(renewable_data$Value, start = c(2010,1), seasonal.periods = c(12))
+
+#check stationarity
+adf.test(renewable_ts)
 ```
+
+p-value < 0.05. The time series is stationary. 
 
 ## Initial Plots
 
@@ -65,7 +70,7 @@ par(mfrow=c(1,1))
 
 ```{r, message=FALSE, warning=FALSE}
 #create a subset for training purpose
-n_for = 6
+n_for = 12
 ts_renewable_train <- subset(renewable_ts,
                                    end = length(renewable_ts)-n_for)
 
@@ -81,7 +86,7 @@ autoplot(ts_renewable_test)
 
 ```{r ETS, echo=TRUE, message=FALSE, warning=FALSE}
 #Fit and forecast STL + ETS model to data
-ETS_fit <-  stlf(ts_renewable_train,h=6)
+ETS_fit <-  stlf(ts_renewable_train,h=12)
 
 #Plot foresting results
 autoplot(ETS_fit) + ylab("Generation")
@@ -123,16 +128,16 @@ ARIMA_Four_fit <- auto.arima(ts_renewable_train,
                              seasonal=FALSE, 
                              lambda=0,
                              xreg=fourier(ts_renewable_train, 
-                                          K=c(2))
+                                          K=c(6))
                              )
 
 #Forecast with ARIMA fit
 #also need to specify h for fourier terms
 ARIMA_Four_for <- forecast(ARIMA_Four_fit,
                            xreg=fourier(ts_renewable_train,
-                                        K=c(2),
-                                        h=6),
-                           h=6
+                                        K=c(6),
+                                        h=12),
+                           h=12
                            ) 
 
 #Plot foresting results
@@ -157,7 +162,7 @@ More info on BATS and TBATS with corresponding equations [here](https://forecast
 # TBATS can take time to fit
 TBATS_fit <- tbats(ts_renewable_train)
 
-TBATS_for <- forecast(TBATS_fit, h=6)
+TBATS_for <- forecast(TBATS_fit, h=12)
 
 #Plot foresting results
 autoplot(TBATS_for) +
@@ -188,27 +193,111 @@ For seasonal data, the fitted model is called an NNAR(p,P,k)[m] model, which is 
 #You can play with the different values for p and P, you can also use xreg with Fourier term to model the multiple seasonality
 
 #NN_fit <- nnetar(ts_act_power_daily_train,p=1,P=1)
-NN_fit <- nnetar(ts_act_power_daily_train,
+NN_fit <- nnetar(ts_renewable_train,
                  p=1,
-                 P=0,
-                 xreg=fourier(ts_act_power_daily_train, K=c(2,12)))
+                 P=1,
+                 xreg=fourier(ts_renewable_train, K=c(2)))
 
 #NN_for <- forecast(NN_fit, h=365) 
 NN_for <- forecast(NN_fit, 
-                   h=365,
-                   xreg=fourier(ts_act_power_daily_train, 
-                                          K=c(2,12),h=365))
+                   h=12,
+                   xreg=fourier(ts_renewable_train, 
+                                          K=c(2),h=12))
 
 
 #Plot foresting results
 autoplot(NN_for) +
-  ylab("Active Power") 
+  ylab("Generation") 
 
 
 #Plot model + observed data
-autoplot(ts_act_power_daily) +
+autoplot(renewable_ts) +
   autolayer(NN_for, series="Neural Network",PI=FALSE)+
-  ylab("Active Power") 
+  ylab("Generation") 
+
+```
+
+## Checking accuracy of the fo models
+
+```{r}
+
+#Model 1: STL + ETS
+ETS_scores <- accuracy(ETS_fit$mean,ts_renewable_test)  
+
+#Model 2: ARIMA + Fourier 
+ARIMA_scores <- accuracy(ARIMA_Four_for$mean,ts_renewable_test)
+
+# Model 3:  TBATS 
+TBATS_scores <- accuracy(TBATS_for$mean,ts_renewable_test)
+
+# Model 4:  Neural Network 
+NN_scores <- accuracy(NN_for$mean,ts_renewable_test)
+
+
+```
+
+Note that a new accuracy measure appeared in the table.
+Theil's U is a relative accuracy measure that compares the forecasted results with the results of forecasting with minimal historical data.
+
+### Compare performance metrics
+
+Now we will create a data frame that combines performance metrics for all the three models.
+You can choose one metric to help you choose among models.
+
+```{r}
+#create data frame
+scores <- as.data.frame(
+  rbind(ETS_scores, ARIMA_scores, TBATS_scores, NN_scores)
+  )
+row.names(scores) <- c("STL+ETS", "ARIMA+Fourier","TBATS","NN")
+
+#choose model with lowest RMSE
+best_model_index <- which.min(scores[,"RMSE"])
+cat("The best model by RMSE is:", row.names(scores[best_model_index,]))    
+
+kbl(scores, 
+      caption = "Forecast Accuracy for Daily Active Power",
+      digits = array(5,ncol(scores))) %>%
+  kable_styling(full_width = FALSE, position = "center", latex_options = "hold_position") %>%
+  #highlight model with lowest RMSE
+  kable_styling(latex_options="striped", stripe_index = which.min(scores[,"RMSE"]))
+```
+
+### Plotting everything together
+
+Here we will use autoplot() and autolayer() from package `ggplot2` to draw a particular plot for time series.
+The function autolayer() takes a few main arguments.
+
+-   **x** Forecast object produced by forecast() function.If forecasts were generated with another function you may need to point to the object either mean or forecast to get the values.\
+-   **include** number of values from time series to include in plot.Default is all values.\
+-   **PI** Logical flag indicating whether to plot prediction intervals.\
+-   **series** Matches an unidentified forecast layer with a colored object on the plot.
+
+```{r}
+autoplot(ts_renewable_test) +
+  autolayer(ETS_fit, PI=FALSE, series="STL+ETS") +
+  autolayer(ARIMA_Four_for, PI=FALSE, series="ARIMA + Fourier") +
+  autolayer(TBATS_for,PI=FALSE, series="TBATS") +
+  autolayer(NN_for,PI=FALSE, series="NN") +
+  ylab("Daily Active Power") +
+  guides(colour=guide_legend(title="Forecast"))
+```
+## Final Forecast
+
+```{r TBATS, echo=TRUE, message=FALSE, warning=FALSE}
+# TBATS can take time to fit
+TBATS_fit_final <- tbats(renewable_ts)
+
+TBATS_for_2025 <- forecast(TBATS_fit_final, h=12)
+
+#Plot foresting results
+autoplot(TBATS_for_2025) +
+  ylab("Generation") 
+
+#Plot model + observed data
+autoplot(renewable_ts) +
+  autolayer(TBATS_for_2025, series="TBATS",PI=FALSE)+
+  ylab("Generation") 
 
 ```
 
