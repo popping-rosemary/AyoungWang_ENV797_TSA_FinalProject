@@ -40,6 +40,16 @@ renewable_data <- read.csv(
   arrange(Time) %>% 
   filter(Time>="2010-01-01")
 
+ng_data <- read.csv(
+  file="./Data/IEA_MonthlyElectricityProduction_1224.csv",
+  header=TRUE,
+  skip=8) %>% 
+  filter(Country=="Germany") %>% 
+  filter(Product == "Natural Gas") %>% 
+  mutate(Time = my(Time) ) %>% 
+  arrange(Time) %>% 
+  filter(Time>="2010-01-01")
+
 summary(renewable_data)
 ```
 
@@ -49,28 +59,37 @@ You can also embed plots, for example:
 
 ```{r , echo=FALSE}
 renewable_ts <- msts(renewable_data$Value, start = c(2010,1), seasonal.periods = c(12))
+ng_ts <- msts(ng_data$Value, start = c(2010,1), seasonal.periods = c(12))
 
 #check stationarity
 adf.test(renewable_ts)
+adf.test(ng_ts)
 ```
 
 p-value < 0.05. The time series is stationary. 
 
 ## Initial Plots
 
-```{r}
-renewable_ts_plot <- 
-  autoplot(renewable_ts) +
+```{r, message=FALSE, Warning=FALSE}
+ts_plot <- 
+  autoplot(renewable_ts, series = "Renewables", aes(color=group)) +
+      autolayer(ng_ts, series= "Natural Gas")+
       theme_minimal()+
-      ggtitle("Total Renewables")+
+      ggtitle("Total Renewables vs. Natural Gas Monthly Net Generation, 2010-2024")+
       ylab("Net Generation")+
       xlab("Year")
-plot(renewable_ts_plot)
+plot(ts_plot)
 
 #ACF and PACF plots
 par(mfrow=c(1,2))
-ACF_Plot <- Acf(renewable_ts, lag = 40, plot = TRUE,main="")
-PACF_Plot <- Pacf(renewable_ts, lag = 40, plot = TRUE,main="")
+ACF_re_plot <- Acf(renewable_ts, lag = 40, plot = TRUE,main="ACF RE")
+PACF_re_plot <- Pacf(renewable_ts, lag = 40, plot = TRUE,main="PACF RE")
+par(mfrow=c(1,1))
+
+#ACF and PACF plots
+par(mfrow=c(1,2))
+ACF_ng_plot <- Acf(ng_ts, lag = 40, plot = TRUE,main="ACF NG")
+PACF_ng_plot <- Pacf(ng_ts, lag = 40, plot = TRUE,main="PACF NG")
 par(mfrow=c(1,1))
 ```
 
@@ -80,13 +99,24 @@ par(mfrow=c(1,1))
 # STL decomposition (Seasonal-Trend-Residual)
 renewable_stl <- stl(renewable_ts, s.window = "periodic")
 autoplot(renewable_stl) +
-  ggtitle("STL Decomposition")
+  ggtitle("STL Decomposition - Renewables")+
+  theme_minimal()
+
+ng_stl <- stl(ng_ts, s.window = "periodic")
+autoplot(ng_stl) +
+  ggtitle("STL Decomposition - NG")+
+  theme_minimal()
 
 # Seasonal strength test (using STL components)
-season_strength <- 1 - (var(renewable_stl$time.series[, "remainder"]) /
+season_strength_RE <- 1 - (var(renewable_stl$time.series[, "remainder"]) /
                         var(renewable_stl$time.series[, "remainder"] +
                             renewable_stl$time.series[, "seasonal"]))
-cat("Estimated Seasonal Strength:", round(season_strength, 3), "\n")
+cat("Estimated Seasonal Strength for Renewables:", round(season_strength_RE, 3), "\n")
+
+season_strength_NG <- 1 - (var(ng_stl$time.series[, "remainder"]) /
+                        var(ng_stl$time.series[, "remainder"] +
+                            ng_stl$time.series[, "seasonal"]))
+cat("Estimated Seasonal Strength for Natural Gas:", round(season_strength_NG, 3), "\n")
 ```
 
 ### Create subsets for training/testing 
@@ -100,6 +130,10 @@ ts_renewable_train <- subset(renewable_ts,
 #create a subset for testing purpose
 ts_renewable_test <- subset(renewable_ts,
                                    start = length(renewable_ts)-n_for)
+
+#create a subset for displaying purpose
+ts_renewable_2015 <- subset(renewable_ts,
+                                   start = length(renewable_ts)-120)
 
 autoplot(ts_renewable_train)
 autoplot(ts_renewable_test)
@@ -115,22 +149,32 @@ ARIMA_forecast <- forecast(object = ARIMA_autofit, h = 12)
 
 autoplot(renewable_ts) +
   autolayer(ARIMA_forecast, series="ARIMA",PI=FALSE) +
-  ylab("Generation")
+  ylab("Generation")+
+  theme_minimal()+
+  ggtitle("ARIMA - RE")
 ```
 
 ### Model 1: STL + ETS
 
-```{r ETS, echo=TRUE, message=FALSE, warning=FALSE}
+```{r ETS, echo=TRUE, message=FALSE, warning=FALSE, fig.dim=(4,6)}
 #Fit and forecast STL + ETS model to data
 ETS_fit <-  stlf(ts_renewable_train,h=12)
 
 #Plot foresting results
-autoplot(ETS_fit) + ylab("Generation")
-
+autoplot(ts_renewable_2015) +
+  autolayer(ETS_fit, series="STL + ETS")+
+  autolayer(ts_renewable_test, series="observed", PI=FALSE, color="black")+
+  ylab("Generation") + 
+  ylim(10000,33000)+
+  theme_minimal()+
+  ggtitle("ETS Model - Renewables")
+  
 #Plot model + observed data
 autoplot(renewable_ts) +
   autolayer(ETS_fit, series="STL + ETS",PI=FALSE) +
-  ylab("Generation")
+  ylab("Generation")+
+  ggtitle("ETS Model - Renewables")+
+  theme_minimal()
 
 #alternative coding if you don't need to save the objects
 #ts_act_power_daily_train %>% stlf(h=365) %>% autoplot() 
@@ -184,6 +228,15 @@ autoplot(renewable_ts) +
   autolayer(ARIMA_Four_for, series="ARIMA_FOURIER",PI=FALSE) +
   ylab("Generation")
 
+#Plot combined results
+autoplot(ts_renewable_2015) +
+  autolayer(ARIMA_Four_for, series="ARIMA_FOURIER")+
+  autolayer(ts_renewable_test, series="observed", PI=FALSE, color="black")+
+  ylab("Generation") + 
+  ylim(10000,33000)+
+  theme_minimal()+
+  ggtitle("ARIMA_FOURIER - Renewables")
+
 ```
 
 ### Model 3: TBATS
@@ -194,7 +247,7 @@ A Box Cox transformation is a transformation of non-normal dependent variables i
 
 More info on BATS and TBATS with corresponding equations [here](https://forecasters.org/wp-content/uploads/gravity_forms/7-2a51b93047891f1ec3608bdbd77ca58d/2014/06/Blaconá_MT_ISF2014.pdf.pdf).
 
-```{r TBATS, echo=TRUE, message=FALSE, warning=FALSE}
+```{r TBATS, echo=TRUE, message=FALSE, warning=FALSE, fig.dim=(4,6)}
 # TBATS can take time to fit
 TBATS_fit <- tbats(ts_renewable_train)
 
@@ -208,6 +261,15 @@ autoplot(TBATS_for) +
 autoplot(renewable_ts) +
   autolayer(TBATS_for, series="TBATS",PI=FALSE)+
   ylab("Generation") 
+
+#Plot combined results
+autoplot(ts_renewable_2015) +
+  autolayer(TBATS_for, series="TBATS")+
+  autolayer(ts_renewable_test, series="observed", color="black")+
+  ylab("Generation") + 
+  ylim(10000,33000)+
+  theme_minimal()+
+  ggtitle("TBATS - Renewables")
 
 ```
 
@@ -225,7 +287,7 @@ For non-seasonal data, the fitted model is denoted as an NNAR(p,k) model, where 
 This is analogous to an AR(p) model but with nonlinear functions.
 For seasonal data, the fitted model is called an NNAR(p,P,k)[m] model, which is analogous to an ARIMA(p,0,0)(P,0,0)[s] model but with nonlinear functions.
 
-```{r NNETAR, echo=TRUE, message=FALSE, warning=FALSE}
+```{r NNETAR, echo=TRUE, message=FALSE, warning=FALSE, fig.dim=(4.6)}
 #You can play with the different values for p and P, you can also use xreg with Fourier term to model the multiple seasonality
 
 #NN_fit <- nnetar(ts_act_power_daily_train,p=1,P=1)
@@ -250,6 +312,15 @@ autoplot(NN_for) +
 autoplot(renewable_ts) +
   autolayer(NN_for, series="Neural Network",PI=FALSE)+
   ylab("Generation") 
+
+#Plot combined results
+autoplot(ts_renewable_2015) +
+  autolayer(NN_for, series="Neural Network")+
+  autolayer(ts_renewable_test, series="observed", color="black")+
+  ylab("Generation") + 
+  ylim(10000,33000)+
+  theme_minimal()+
+  ggtitle("NN - Renewables")
 
 ```
 
@@ -292,7 +363,7 @@ best_model_index <- which.min(scores[,"RMSE"])
 cat("The best model by RMSE is:", row.names(scores[best_model_index,]))    
 
 kbl(scores, 
-      caption = "Forecast Accuracy for Daily Active Power",
+      caption = "Forecast Accuracy for Renewables Net Generation",
       digits = array(5,ncol(scores))) %>%
   kable_styling(full_width = FALSE, position = "center", latex_options = "hold_position") %>%
   #highlight model with lowest RMSE
@@ -328,13 +399,21 @@ TBATS_for_2025 <- forecast(TBATS_fit_final, h=12)
 
 #Plot foresting results
 autoplot(TBATS_for_2025) +
-  ylab("Generation") 
+  ylab("Generation") +
+  ggtitle("Net Generation - Total Renewables (TBATS)")+
+  theme_minimal()
 
 #Plot model + observed data
 autoplot(renewable_ts) +
   autolayer(TBATS_for_2025, series="TBATS",PI=FALSE)+
   ylab("Generation") 
 
+for_start = as.Date("2025-01-01") 
+for_end = as.Date("2025-12-01")
+for_period <- format(seq(as.Date(for_start), as.Date(for_end), by = "month"), "%b %Y")
+
+TBATS_re_df <- tibble(Time = for_period, NetGen = TBATS_for_2025$mean)
+print(TBATS_re_df)
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
