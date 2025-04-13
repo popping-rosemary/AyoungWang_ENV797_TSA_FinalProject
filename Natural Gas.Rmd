@@ -67,6 +67,13 @@ par(mfrow=c(1,2))
 ACF_ng_plot <- Acf(ng_ts, lag = 40, plot = TRUE,main="ACF of Natural Gas")
 PACF_ng_plot <- Pacf(ng_ts, lag = 40, plot = TRUE,main="ACF of Natural Gas")
 par(mfrow=c(1,1))
+
+ng_stl <- stl(ng_ts, s.window = "periodic")
+autoplot(ng_stl) +
+  ggtitle("STL Decomposition - NG")+
+  theme_minimal()
+
+
 ```
 
 ```{r, message=FALSE, warning=FALSE}
@@ -91,10 +98,26 @@ ETS_ng <- stlf(ts_ng_train,h=12)
 #Plot foresting results
 autoplot(ETS_ng) + ylab("Production")
 
+
+autolayer(ETS_ng, series="STL + ETS")+
+  autolayer(ts_ng_train, series="observed", PI=FALSE, color="black")+
+  ylab("Generation") + 
+  ylim(10000,33000)+
+  theme_minimal()
+
+#Plot model + observed data
+autoplot(ng_ts) +
+  autolayer(ETS_ng, series = "STL + ETS", PI = FALSE) +
+  ylab("Generation") +
+  ggtitle("EST Model - Natural Gas")+
+  theme_minimal()
+
 #Plot model + observed data
 autoplot(ng_ts) +
   autolayer(ETS_ng, series="STL + ETS",PI=FALSE) +
-  ylab("Production")
+  ylab("Generation")+
+  ggtitle("ETS Model - Natural Gas")+
+  theme_minimal()
 
 ```
 
@@ -102,6 +125,18 @@ autoplot(ng_ts) +
 ### Model 2: ARIMA + FOURIER terms
 
 ```{r ARIMA, echo=TRUE, message=FALSE, warning=FALSE}
+#Simple ARIMA 
+ARIMA_ng<-auto.arima(ts_ng_train)
+print(ARIMA_ng)
+
+ARIMA_ng_forecast <- forecast(object = ARIMA_ng, h = 12)
+
+autoplot(ng_ts) +
+  autolayer(ARIMA_ng_forecast, series="ARIMA",PI=FALSE) +
+  ylab("Generation")+
+  theme_minimal()+
+  ggtitle("ARIMA - NG")
+
 ARIMA_f<- auto.arima(ts_ng_train, 
                              seasonal=FALSE, 
                              lambda=0,
@@ -123,9 +158,19 @@ autoplot(ARIMA_f_forecast) + ylab("Production")
 
 #Plot model + observed data
 autoplot(ng_ts) +
-  autolayer(ARIMA_f_forecast, series="ARIMA_FOURIER",PI=FALSE) +
-  ylab("Production")
+  autolayer(ARIMA_f_forecast, series="ARIMA_FOURIER") +
+  autolayer(ts_ng_test, series="observed", PI=FALSE, color="black")+
+  ylab("Generation")+
+  theme_minimal() +
+  ggtitle("ARIMA_FOURIER - Natural Gas")
 
+#Plot combined results
+autoplot(ng_ts) +
+  autolayer(ARIMA_f_forecast, series="ARIMA_FOURIER")+
+  autolayer(ts_ng_test, series="observed", PI=FALSE, color="black")+
+  ylab("Generation") + 
+  theme_minimal()+
+  ggtitle("ARIMA_FOURIER - Natural Gas")
 ```
 
 ### Model 3: TBATS
@@ -143,7 +188,16 @@ autoplot(TBATS_ng_forecast) +
 #Plot model + observed data
 autoplot(ng_ts) +
   autolayer(TBATS_ng_forecast, series="TBATS",PI=FALSE)+
-  ylab("Production") 
+  ylab("Generation") 
+
+#Plot combined results 
+autoplot(ng_ts) +
+  autolayer(TBATS_ng_forecast, series="TBATS")+
+  autolayer(ts_ng_test, series="observed", color="black")+
+  ylab("Generation") + 
+  theme_minimal()+
+  ggtitle("TBATS - Natural Gas")
+
 
 ```
 
@@ -171,6 +225,14 @@ autoplot(Neural_ng_forecast) +
 autoplot(ng_ts) +
   autolayer(Neural_ng_forecast, series="Neural Network",PI=FALSE)+
   ylab("Production") 
+
+#Plot combined results
+autoplot(ng_ts) +
+  autolayer(Neural_ng_forecast, series="Neural Network")+
+  autolayer(ts_ng_test, series="observed", color="black")+
+  ylab("Generation") + 
+  theme_minimal()+
+  ggtitle("NN - Natural Gas")
 
 ```
 
@@ -209,7 +271,7 @@ best_model_ng <- which.min(scores_ng[,"RMSE"])
 cat("The best model by RMSE is:", row.names(scores_ng[best_model_ng,]))    
 
 kbl(scores_ng, 
-      caption = "Forecast Accuracy for Daily Active Power",
+      caption = "Forecast Accuracy for Natural Gas",
       digits = array(5,ncol(scores_ng))) %>%
   kable_styling(full_width = FALSE, position = "center", latex_options = "hold_position") %>%
   kable_styling(latex_options="striped", stripe_index = which.min(scores_ng[,"RMSE"]))
@@ -230,7 +292,7 @@ autoplot(ts_ng_test) +
 
 #ARIMA + Fourier is the best-fit model
 
-```{r TBATS, echo=TRUE, message=FALSE, warning=FALSE}
+```{r ARIMA, echo=TRUE, message=FALSE, warning=FALSE}
 
 ARIMA_f_ng_final <- auto.arima(ng_ts, 
                                 seasonal=FALSE, 
@@ -246,12 +308,26 @@ ARIMA_f_forecast_2025 <- forecast(ARIMA_f_ng_final,
                                   h = 12)
 
 #Plot foresting results
-autoplot(ARIMA_f_forecast_2025) +
-  ylab("Production") 
+autoplot(ng_ts)+
+  autolayer(ARIMA_f_forecast_2025, series = "ARIM+FOURIER",PI=FALSE) +
+  ylab("Generation")+
+  ggtitle("Net Generation - Natural Gas (ARIMA+Fourier)")+
+  theme_minimal()
+
+
 
 #Plot model + observed data
 autoplot(ng_ts) +
-  autolayer(ARIMA_f_forecast_2025, series="ARIMA+Fourier",PI=FALSE)+
-  ylab("Production") 
+  autolayer(ARIMA_f_forecast_2025, series="ARIMA+FOURIER",PI=FALSE)+
+  ylab("Generation") 
+
+for_start = as.Date("2025-01-01") 
+for_end = as.Date("2025-12-01")
+for_period <- format(seq(as.Date(for_start), as.Date(for_end), by = "month"), "%b %Y")
+
+ARIMA_ng_df <- tibble(Time = for_period, NetGen = ARIMA_f_forecast_2025$mean)
+print(ARIMA_ng_df)
+```
+
 
 ```
