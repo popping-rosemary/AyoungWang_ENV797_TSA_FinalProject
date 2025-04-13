@@ -26,6 +26,7 @@ library(tidyverse)
 library(smooth)
 library(zoo)
 library(kableExtra)
+library(cowplot)
 ```
 
 ```{r data file}
@@ -38,6 +39,8 @@ renewable_data <- read.csv(
   mutate(Time = my(Time) ) %>% 
   arrange(Time) %>% 
   filter(Time>="2010-01-01")
+
+summary(renewable_data)
 ```
 
 ## Import data file 
@@ -58,7 +61,10 @@ p-value < 0.05. The time series is stationary.
 ```{r}
 renewable_ts_plot <- 
   autoplot(renewable_ts) +
-      theme_minimal()
+      theme_minimal()+
+      ggtitle("Total Renewables")+
+      ylab("Net Generation")+
+      xlab("Year")
 plot(renewable_ts_plot)
 
 #ACF and PACF plots
@@ -67,6 +73,23 @@ ACF_Plot <- Acf(renewable_ts, lag = 40, plot = TRUE,main="")
 PACF_Plot <- Pacf(renewable_ts, lag = 40, plot = TRUE,main="")
 par(mfrow=c(1,1))
 ```
+
+## Check Seasonality
+
+```{r}
+# STL decomposition (Seasonal-Trend-Residual)
+renewable_stl <- stl(renewable_ts, s.window = "periodic")
+autoplot(renewable_stl) +
+  ggtitle("STL Decomposition")
+
+# Seasonal strength test (using STL components)
+season_strength <- 1 - (var(renewable_stl$time.series[, "remainder"]) /
+                        var(renewable_stl$time.series[, "remainder"] +
+                            renewable_stl$time.series[, "seasonal"]))
+cat("Estimated Seasonal Strength:", round(season_strength, 3), "\n")
+```
+
+### Create subsets for training/testing 
 
 ```{r, message=FALSE, warning=FALSE}
 #create a subset for training purpose
@@ -80,6 +103,19 @@ ts_renewable_test <- subset(renewable_ts,
 
 autoplot(ts_renewable_train)
 autoplot(ts_renewable_test)
+```
+
+## ARIMA
+
+```{r}
+ARIMA_autofit <- auto.arima(ts_renewable_train)
+print(SARIMA_autofit)
+
+ARIMA_forecast <- forecast(object = ARIMA_autofit, h = 12)
+
+autoplot(renewable_ts) +
+  autolayer(ARIMA_forecast, series="ARIMA",PI=FALSE) +
+  ylab("Generation")
 ```
 
 ### Model 1: STL + ETS
