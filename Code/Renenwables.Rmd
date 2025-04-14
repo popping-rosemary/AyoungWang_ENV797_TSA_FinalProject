@@ -141,7 +141,7 @@ autoplot(ts_renewable_test)
 
 ## ARIMA
 
-```{r}
+```{r, fig.dim=(4,6)}
 ARIMA_autofit <- auto.arima(ts_renewable_train)
 print(SARIMA_autofit)
 
@@ -287,7 +287,7 @@ For non-seasonal data, the fitted model is denoted as an NNAR(p,k) model, where 
 This is analogous to an AR(p) model but with nonlinear functions.
 For seasonal data, the fitted model is called an NNAR(p,P,k)[m] model, which is analogous to an ARIMA(p,0,0)(P,0,0)[s] model but with nonlinear functions.
 
-```{r NNETAR, echo=TRUE, message=FALSE, warning=FALSE, fig.dim=(4.6)}
+```{r NNETAR, echo=TRUE, message=FALSE, warning=FALSE, fig.dim=(4,6)}
 #You can play with the different values for p and P, you can also use xreg with Fourier term to model the multiple seasonality
 
 #NN_fit <- nnetar(ts_act_power_daily_train,p=1,P=1)
