@@ -143,7 +143,7 @@ autoplot(ts_renewable_test)
 
 ```{r, fig.dim=(4,6)}
 ARIMA_autofit <- auto.arima(ts_renewable_train)
-print(SARIMA_autofit)
+print(ARIMA_autofit)
 
 ARIMA_forecast <- forecast(object = ARIMA_autofit, h = 12)
 
