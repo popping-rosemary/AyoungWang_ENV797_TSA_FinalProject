@@ -1,0 +1,414 @@
+---
+title: "TSA Final Project - Forecasting Post-War Electricity Mix in Germany"
+author: "Ayoung Kim, Lucy Wang"
+output: pdf_document
+geometry: margin=2.54cm
+---
+
+## Instructions to Complete your Project Report
+
+### General Guidelines
+
+1. Use Rmd for your final report.
+
+2. Write in scientific style, not narrative style.
+
+3. [Global options for R chunks](https://rmarkdown.rstudio.com/lesson-3.html) should be set so that only relevant output is displayed. Turn on/off messages and warnings when applicable to avoid unnecessary outputs on the pdf.
+
+4. Make sure your final knitted PDF looks professional. Format tables, figures, chapters, etc.
+
+5. Make sure you add a link to you Github repository in the final report. If you're using public data. Make the repository public. If using private data, make it private and please send me an invitation to collaborate. Otherwise, I will not be able to access your repository.
+
+6. Make sure the PDF file has the file name "Lastname1_Lastname2_Lastname3_ENV797_Project.pdf" and submit it to Sakai under A09 - Final Project - Part III. You will only submit your PDF file. One submission per group.
+
+### Contents of the Report 
+
+#### Introduction, Motivation, Relevance, Objectives
+
+Write a few paragraphs detailing the rationale for your study. This should include both the context of the topic as well as a rationale for your choice of dataset (reason for location, variables, etc.). You may choose to include citations if you like or any other reference you may have used during the project (optional).
+1) Context of topic (Done)
+2) Reason for location (Done), variables including the rationale for my choice of dataset (Done) 
+3) Citations (Done)
+
+Paragraph:
+Several European countries, including Germany, had relied heavily on imported fossil fuels, particularly natural gas from Russia, before the Ukraine-Russia war broke out in February 2023 (Maliszewska-Nienartowicz, 2024). According to data on German gas imports in 2020 (BP), 55.2% of imported gas came from Russia (Umbach, 2022). However, the onset of the war disrupted the energy market across Europe, especially impacting Germany's energy supply. In response, Germany reactivated coal plants, shifting back from natural gas—considered a cleaner energy source—to coal (Luschini, Rego & Montebello, 2024). Significant changes in Germany’s energy mix and market were anticipated, and the energy crisis highlighted the urgent need for a transition to renewable energy to enhance energy security by reducing dependence on imported energy sources (Maliszewska-Nienartowicz, 2024).
+In this context, we aimed to investigate how the Ukraine-Russia war (2023) actually affected Germany’s energy mix, particularly regarding Natural Gas and Renewables.
+
+This project focused specifically on changes in Germany's electricity generation mix. Although Natural Gas plays a primary role in heating and cooling—accounting for 44% of total imported natural gas usage—this study sought to forecast how the role of Natural Gas may evolve in Germany’s electricity sector and the subsequent impacts on the adoption of Renewables post Ukraine-Russia war. 
+
+(Description - Energy Security, Policy & Market, Renewable Transition)
+
+
+Throughout this project, the analyses are based on monthly electricity production data from the International Energy Agency (IEA).
+
+#### Dataset information
+
+Provide information on how the dataset for this analysis were collected (source), the data contained in the dataset (format). Describe how you wrangled/processed your dataset to get the time series object.
+
+Add a table that summarizes your data structure (variables, units, ranges and/or central tendencies, data source if multiple are used, etc.). This table should inserted as a `kable` function in an R chunk. Just show the first 10 rows of your data. Do not include the code used to generate your table. 
+
+1) How dataset was collected 
+2) Data description (Data contained including the format)
+3) A table summarizing the data structre (variables, units, ranges, central tendencies, data source ) - Kable function, show first 10 rows 
+ - X include code to generate the table
+
+(Paragraph)
+The entire analysis was based on the Monthly Electricity Production data from the International Energy Agency (IEA)'s Monthly Electricity Statistics (https://www.iea.org/data-and-statistics/data-product/monthly-electricity-statistics). 
+The dataset consists of the following columns: Country, Time, Balance, Product, Value, and Unit. It contains monthly electricity mix data by energy source from January 2010 to December 2024, covering countries such as Australia, Denmark, Germany, Iceland, Ireland, Japan, and Korea, among others. In the "Product" column, energy sources include Hydro, Coal/Peat & Manufactured Gas, Oil and Petroleum Products, Natural Gas, and Total Renewables (comprising Hydro, Geothermal, Solar, Wind, and Other). Our team cleaned the dataset and filtered it to include only Germany, Total Renewables, and Natural Gas. All units are in GWh.
+
+```{r, warning=FALSE, echo=FALSE}
+library(knitr)
+
+# Create the table
+summary_germany <- data.frame(
+  Variable = c("Range", "Unit", "Central Tendency", "Source"),
+  Natural_Gas = c("2010/01/01 - 2024/12/31", "GWh", "Mean: 6419.49", "IEA"),
+  Renewables = c("2010/01/01 - 2024/12/31", "GWh", "Mean: 16835.20", "IEA")
+)
+
+# Display the table
+kable(summary_germany, caption = "Summary Table for Natural Gas and Renewables")
+```
+#### Analysis (Methods and Models)
+
+Describe the analysis and tests that were performed. Described the components of the time series you identified. List any packages and functions used. Include visualizations of your dataset (i.e. time series plot, ACF, PACF, etc). 
+
+Format your R chunks so that graphs are displayed but code is not displayed. Accompany these graphs with text sections that describe the visualizations and provide context for further analyses.
+
+Each figure should be accompanied by a caption, and referenced within the text if applicable.
+
+## Natural Gas Analysis
+
+```{r packages, warning=FALSE, message=FALSE}
+library(lubridate)
+library(ggplot2)
+library(forecast)  
+library(Kendall)
+library(tseries)
+library(outliers)
+library(tidyverse)
+library(smooth)
+library(zoo)
+library(kableExtra)
+```
+
+### NG- Import data file 
+```{r data file}
+ng_data <- read.csv(
+  file="./Data/IEA_MonthlyElectricityProduction_1224.csv",
+  header=TRUE,
+  skip=8) %>% 
+  filter(Country=="Germany") %>% 
+  filter(Product == "Natural Gas") %>% 
+  mutate(Time = my(Time) ) %>% 
+  arrange(Time) %>% 
+  filter(Time>="2010-01-01")
+
+```
+
+### NG - MSTS 
+
+```{r , echo=FALSE}
+ng_ts <- msts(ng_data$Value, start = c(2010,1), seasonal.periods = c(12))
+
+#check stationarity
+adf.test(ng_ts)
+```
+
+p-value < 0.05. The time series is stationary. 
+
+### NG - Initial Plots
+
+```{r}
+#Plot for Natural Gas
+ng_ts_plot <- autoplot(ng_ts)+
+  ylab("Natural Gas")
+
+plot(ng_ts_plot)
+
+#ACF and PACF plots
+par(mfrow=c(1,2))
+ACF_ng_plot <- Acf(ng_ts, lag = 40, plot = TRUE,main="ACF of Natural Gas")
+PACF_ng_plot <- Pacf(ng_ts, lag = 40, plot = TRUE,main="ACF of Natural Gas")
+par(mfrow=c(1,1))
+
+ng_stl <- stl(ng_ts, s.window = "periodic")
+autoplot(ng_stl) +
+  ggtitle("STL Decomposition - NG")+
+  theme_minimal()
+
+
+```
+
+```{r, message=FALSE, warning=FALSE}
+#create a subset for training purpose
+n_for = 12
+ts_ng_train <- subset(ng_ts,
+                      end = length(ng_ts)-n_for)
+
+#create a subset for testing purpose
+ts_ng_test <- subset(ng_ts,start = length(ng_ts)-n_for)
+
+autoplot(ts_ng_train)
+autoplot(ts_ng_test)
+```
+
+### NG - Model 1: STL + ETS
+
+```{r ETS, echo=TRUE, message=FALSE, warning=FALSE}
+#Fit and forecast STL + ETS model to data
+ETS_ng <- stlf(ts_ng_train,h=12)
+
+#Plot foresting results
+autoplot(ETS_ng) + ylab("Production")
+
+
+autolayer(ETS_ng, series="STL + ETS")+
+  autolayer(ts_ng_train, series="observed", PI=FALSE, color="black")+
+  ylab("Generation") + 
+  ylim(10000,33000)+
+  theme_minimal()
+
+#Plot model + observed data
+autoplot(ng_ts) +
+  autolayer(ETS_ng, series = "STL + ETS", PI = FALSE) +
+  ylab("Generation") +
+  ggtitle("EST Model - Natural Gas")+
+  theme_minimal()
+
+#Plot model + observed data
+autoplot(ng_ts) +
+  autolayer(ETS_ng, series="STL + ETS",PI=FALSE) +
+  ylab("Generation")+
+  ggtitle("ETS Model - Natural Gas")+
+  theme_minimal()
+
+```
+
+### NG - Model 2: ARIMA + FOURIER terms
+
+```{r ARIMA, echo=TRUE, message=FALSE, warning=FALSE}
+#Simple ARIMA 
+ARIMA_ng<-auto.arima(ts_ng_train)
+print(ARIMA_ng)
+
+ARIMA_ng_forecast <- forecast(object = ARIMA_ng, h = 12)
+
+autoplot(ng_ts) +
+  autolayer(ARIMA_ng_forecast, series="ARIMA",PI=FALSE) +
+  ylab("Generation")+
+  theme_minimal()+
+  ggtitle("ARIMA - NG")
+
+ARIMA_f<- auto.arima(ts_ng_train, 
+                             seasonal=FALSE, 
+                             lambda=0,
+                             xreg=fourier(ts_ng_train, 
+                                          K=c(6))
+                             )
+
+#Forecast with ARIMA fit
+#also need to specify h for fourier terms
+ARIMA_f_forecast <- forecast(ARIMA_f,
+                           xreg=fourier(ts_ng_train,
+                                        K=c(6),
+                                        h=12),
+                           h=12
+                           ) 
+
+#Plot foresting results
+autoplot(ARIMA_f_forecast) + ylab("Production")
+
+#Plot model + observed data
+autoplot(ng_ts) +
+  autolayer(ARIMA_f_forecast, series="ARIMA_FOURIER") +
+  autolayer(ts_ng_test, series="observed", PI=FALSE, color="black")+
+  ylab("Generation")+
+  theme_minimal() +
+  ggtitle("ARIMA_FOURIER - Natural Gas")
+
+#Plot combined results
+autoplot(ng_ts) +
+  autolayer(ARIMA_f_forecast, series="ARIMA_FOURIER")+
+  autolayer(ts_ng_test, series="observed", PI=FALSE, color="black")+
+  ylab("Generation") + 
+  theme_minimal()+
+  ggtitle("ARIMA_FOURIER - Natural Gas")
+```
+
+### NG - Model 3: TBATS
+
+```{r TBATS, echo=TRUE, message=FALSE, warning=FALSE}
+# TBATS can take time to fit
+TBATS_ng_fit <- tbats(ts_ng_train)
+
+TBATS_ng_forecast <- forecast(TBATS_ng_fit, h=12)
+
+#Plot foresting results
+autoplot(TBATS_ng_forecast) +
+  ylab("Production") 
+
+#Plot model + observed data
+autoplot(ng_ts) +
+  autolayer(TBATS_ng_forecast, series="TBATS",PI=FALSE)+
+  ylab("Generation") 
+
+#Plot combined results 
+autoplot(ng_ts) +
+  autolayer(TBATS_ng_forecast, series="TBATS")+
+  autolayer(ts_ng_test, series="observed", color="black")+
+  ylab("Generation") + 
+  theme_minimal()+
+  ggtitle("TBATS - Natural Gas")
+
+
+```
+
+### NG - Model 4: Neural Network Time Series Forecasts
+
+```{r NNETAR, echo=TRUE, message=FALSE, warning=FALSE}
+
+Neural_ng_fit <- nnetar(ts_ng_train,
+                 p=1,
+                 P=1,
+                 xreg=fourier(ts_ng_train, K=c(2)))
+
+Neural_ng_forecast <- forecast(Neural_ng_fit, 
+                   h=12,
+                   xreg=fourier(ts_ng_train, 
+                                          K=c(2),h=12))
+
+
+#Plot foresting results
+autoplot(Neural_ng_forecast) +
+  ylab("Production") 
+
+
+#Plot model + observed data
+autoplot(ng_ts) +
+  autolayer(Neural_ng_forecast, series="Neural Network",PI=FALSE)+
+  ylab("Production") 
+
+#Plot combined results
+autoplot(ng_ts) +
+  autolayer(Neural_ng_forecast, series="Neural Network")+
+  autolayer(ts_ng_test, series="observed", color="black")+
+  ylab("Generation") + 
+  theme_minimal()+
+  ggtitle("NN - Natural Gas")
+
+```
+
+### NG - Checking accuracy of the forecast models
+
+```{r}
+
+#Model 1: STL + ETS
+ETS_ng_scores <- accuracy(ETS_ng$mean,ts_ng_test)  
+
+#Model 2: ARIMA + Fourier 
+ARIMA_ng_scores <- accuracy(ARIMA_f_forecast$mean,ts_ng_test)
+
+# Model 3:  TBATS 
+TBATS_ng_scores <- accuracy(TBATS_ng_forecast$mean,ts_ng_test)
+
+# Model 4:  Neural Network 
+NN_ng_scores <- accuracy(Neural_ng_forecast$mean,ts_ng_test)
+
+```
+
+### Compare performance metrics
+```{r}
+# Make it a data frame
+scores_load <- as.data.frame(
+  rbind(ETS_scores, ARIMA_scores, TBATS_scores, NN_scores)
+)
+row.names(scores_load) <- c("STL + ETS", "ARIMA + Fourier", "TBATS", "Neural Network")
+
+# Choose model with lowest RMSE
+best_model_load <- which.min(scores_load[,"RMSE"])
+cat("The best model by RMSE is:", row.names(scores_load[best_model_load,]), "\n")
+
+# Create nice kable table
+library(kableExtra)
+
+kbl(scores_load,
+    caption = "Forecast Accuracy for Daily Load",
+    digits = array(5, ncol(scores_load))) %>%
+  kable_styling(full_width = FALSE, position = "center", latex_options = "hold_position") %>%
+  kable_styling(latex_options = "striped", stripe_index = best_model_load)
+
+```
+
+### Plotting everything together
+```{r}
+autoplot(ts_ng_test) +
+  autolayer(ETS_ng, PI=FALSE, series="STL+ETS") +
+  autolayer(ARIMA_f_forecast, PI=FALSE, series="ARIMA + Fourier") +
+  autolayer(TBATS_ng_forecast,PI=FALSE, series="TBATS") +
+  autolayer(Neural_ng_forecast,PI=FALSE, series="Neural Network") +
+  ylab("Daily Active Power") +
+  guides(colour=guide_legend(title="Forecast"))
+```
+## Final Forecast : ARIMA + Fourier is the best-fit model
+
+```{r ARIMA, echo=TRUE, message=FALSE, warning=FALSE}
+
+ARIMA_f_ng_final <- auto.arima(ng_ts, 
+                                seasonal=FALSE, 
+                                lambda=0,
+                                xreg = fourier(ng_ts, K = c(6)))
+
+# Future Values
+Fourier_ng <- fourier(ng_ts, K = c(6), h = 12)
+
+# Forecast using the same type of regressors
+ARIMA_f_forecast_2025 <- forecast(ARIMA_f_ng_final, 
+                                  xreg = Fourier_ng, 
+                                  h = 12)
+
+#Plot foresting results
+autoplot(ng_ts)+
+  autolayer(ARIMA_f_forecast_2025, series = "ARIM+FOURIER",PI=FALSE) +
+  ylab("Generation")+
+  ggtitle("Net Generation - Natural Gas (ARIMA+Fourier)")+
+  theme_minimal()
+
+
+
+#Plot model + observed data
+autoplot(ng_ts) +
+  autolayer(ARIMA_f_forecast_2025, series="ARIMA+FOURIER",PI=FALSE)+
+  ylab("Generation") 
+
+for_start = as.Date("2025-01-01") 
+for_end = as.Date("2025-12-01")
+for_period <- format(seq(as.Date(for_start), as.Date(for_end), by = "month"), "%b %Y")
+
+ARIMA_ng_df <- tibble(Time = for_period, NetGen = ARIMA_f_forecast_2025$mean)
+print(ARIMA_ng_df)
+```
+
+#### Summary and Conclusions
+
+Summarize your major findings from your analyses in a few paragraphs and plots. What conclusions do you draw from your findings? Any insights on how to improve the model?
+
+(Conclusion - NG)
+Based on the testing with 4 models, STL+ETS, ARIMA + Fourier, TBATS, Neural Network, and figured out that ARIMA with fourier terms is the best fitting model for the Natural Gas data.
+
+
+(Insights on how to improve the model - NG)
+
+
+
+
+
+#### Reference 
+(Maliszewska-Nienartowicz, 2024)
+(Luschini, Rego & Montebello, 2024)
+(Umbach, 2022) :https://www.gisreportsonline.com/r/german-gas-policy/
+
+
+
+
+
