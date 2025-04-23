@@ -36,8 +36,7 @@ In this context, we aimed to investigate how the Ukraine-Russia war (2023) actua
 
 This project focused specifically on changes in Germany's electricity generation mix. Although Natural Gas plays a primary role in heating and cooling—accounting for 44% of total imported natural gas usage—this study sought to forecast how the role of Natural Gas may evolve in Germany’s electricity sector and the subsequent impacts on the adoption of Renewables post Ukraine-Russia war. 
 
-(Description - Energy Security, Policy & Market, Renewable Transition)
-
+Lucy: (Description - Energy Security, Policy & Market, Renewable Transition), Objectives 
 
 Throughout this project, the analyses are based on monthly electricity production data from the International Energy Agency (IEA).
 
@@ -69,7 +68,7 @@ summary_germany <- data.frame(
 # Display the table
 kable(summary_germany, caption = "Summary Table for Natural Gas and Renewables")
 ```
-#### Analysis (Methods and Models)
+#### Analysis (Methods and Models) - Lucy 
 
 Describe the analysis and tests that were performed. Described the components of the time series you identified. List any packages and functions used. Include visualizations of your dataset (i.e. time series plot, ACF, PACF, etc). 
 
@@ -350,7 +349,14 @@ autoplot(ts_ng_test) +
   ylab("Daily Active Power") +
   guides(colour=guide_legend(title="Forecast"))
 ```
-## Final Forecast : ARIMA + Fourier is the best-fit model
+
+#### Summary and Conclusions
+
+*Final forecast under conclusions
+
+Summarize your major findings from your analyses in a few paragraphs and plots. What conclusions do you draw from your findings? Any insights on how to improve the model?
+
+## Final Forecast NG : ARIMA + Fourier is the best-fit model
 
 ```{r ARIMA, echo=TRUE, message=FALSE, warning=FALSE}
 
@@ -389,12 +395,11 @@ ARIMA_ng_df <- tibble(Time = for_period, NetGen = ARIMA_f_forecast_2025$mean)
 print(ARIMA_ng_df)
 ```
 
-#### Summary and Conclusions
-
-Summarize your major findings from your analyses in a few paragraphs and plots. What conclusions do you draw from your findings? Any insights on how to improve the model?
-
-(Conclusion - NG)
+Ayoung: (Conclusion - NG)
 Based on the testing with 4 models, STL+ETS, ARIMA + Fourier, TBATS, Neural Network, and figured out that ARIMA with fourier terms is the best fitting model for the Natural Gas data.
+
+
+Lucy: (Conclusion - Renewables)
 
 
 (Insights on how to improve the model - NG)
