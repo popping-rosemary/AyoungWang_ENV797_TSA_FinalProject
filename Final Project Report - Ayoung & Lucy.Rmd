@@ -42,31 +42,20 @@ Throughout this project, the analyses are based on monthly electricity productio
 
 #### Dataset information
 
-Provide information on how the dataset for this analysis were collected (source), the data contained in the dataset (format). Describe how you wrangled/processed your dataset to get the time series object.
-
-Add a table that summarizes your data structure (variables, units, ranges and/or central tendencies, data source if multiple are used, etc.). This table should inserted as a `kable` function in an R chunk. Just show the first 10 rows of your data. Do not include the code used to generate your table. 
-
-1) How dataset was collected 
-2) Data description (Data contained including the format)
-3) A table summarizing the data structre (variables, units, ranges, central tendencies, data source ) - Kable function, show first 10 rows 
- - X include code to generate the table
-
-(Paragraph)
-The entire analysis was based on the Monthly Electricity Production data from the International Energy Agency (IEA)'s Monthly Electricity Statistics (https://www.iea.org/data-and-statistics/data-product/monthly-electricity-statistics). 
+The entire analysis was based on the Monthly Electricity Production data from the International Energy Agency (IEA)'s Monthly Electricity Statistics iin csv (https://www.iea.org/data-and-statistics/data-product/monthly-electricity-statistics). 
 The dataset consists of the following columns: Country, Time, Balance, Product, Value, and Unit. It contains monthly electricity mix data by energy source from January 2010 to December 2024, covering countries such as Australia, Denmark, Germany, Iceland, Ireland, Japan, and Korea, among others. In the "Product" column, energy sources include Hydro, Coal/Peat & Manufactured Gas, Oil and Petroleum Products, Natural Gas, and Total Renewables (comprising Hydro, Geothermal, Solar, Wind, and Other). Our team cleaned the dataset and filtered it to include only Germany, Total Renewables, and Natural Gas. All units are in GWh.
 
 ```{r, warning=FALSE, echo=FALSE}
 library(knitr)
 
-# Create the table
+#Table 
 summary_germany <- data.frame(
   Variable = c("Range", "Unit", "Central Tendency", "Source"),
   Natural_Gas = c("2010/01/01 - 2024/12/31", "GWh", "Mean: 6419.49", "IEA"),
   Renewables = c("2010/01/01 - 2024/12/31", "GWh", "Mean: 16835.20", "IEA")
 )
 
-# Display the table
-kable(summary_germany, caption = "Summary Table for Natural Gas and Renewables")
+kable(summary_germany, caption = "Summary Table for Energy Mix in Germany")
 ```
 #### Analysis (Methods and Models) - Lucy 
 
@@ -78,7 +67,7 @@ Each figure should be accompanied by a caption, and referenced within the text i
 
 ## Natural Gas Analysis
 
-```{r packages, warning=FALSE, message=FALSE}
+```{r packages, warning=FALSE, message=FALSE, echo=FALSE}
 library(lubridate)
 library(ggplot2)
 library(forecast)  
@@ -92,7 +81,7 @@ library(kableExtra)
 ```
 
 ### NG- Import data file 
-```{r data file}
+```{r data file, echo=FALSE}
 ng_data <- read.csv(
   file="./Data/IEA_MonthlyElectricityProduction_1224.csv",
   header=TRUE,
@@ -118,7 +107,7 @@ p-value < 0.05. The time series is stationary.
 
 ### NG - Initial Plots
 
-```{r}
+```{r, echo=FALSE}
 #Plot for Natural Gas
 ng_ts_plot <- autoplot(ng_ts)+
   ylab("Natural Gas")
@@ -139,7 +128,7 @@ autoplot(ng_stl) +
 
 ```
 
-```{r, message=FALSE, warning=FALSE}
+```{r, message=FALSE, warning=FALSE, echo=FALSE}
 #create a subset for training purpose
 n_for = 12
 ts_ng_train <- subset(ng_ts,
@@ -154,7 +143,7 @@ autoplot(ts_ng_test)
 
 ### NG - Model 1: STL + ETS
 
-```{r ETS, echo=TRUE, message=FALSE, warning=FALSE}
+```{r ETS, echo=FALSE, message=FALSE, warning=FALSE}
 #Fit and forecast STL + ETS model to data
 ETS_ng <- stlf(ts_ng_train,h=12)
 
@@ -237,7 +226,7 @@ autoplot(ng_ts) +
 
 ### NG - Model 3: TBATS
 
-```{r TBATS, echo=TRUE, message=FALSE, warning=FALSE}
+```{r TBATS, echo=FALSE, message=FALSE, warning=FALSE}
 # TBATS can take time to fit
 TBATS_ng_fit <- tbats(ts_ng_train)
 
@@ -265,7 +254,7 @@ autoplot(ng_ts) +
 
 ### NG - Model 4: Neural Network Time Series Forecasts
 
-```{r NNETAR, echo=TRUE, message=FALSE, warning=FALSE}
+```{r NNETAR, echo=FALSE, message=FALSE, warning=FALSE}
 
 Neural_ng_fit <- nnetar(ts_ng_train,
                  p=1,
@@ -300,7 +289,7 @@ autoplot(ng_ts) +
 
 ### NG - Checking accuracy of the forecast models
 
-```{r}
+```{r, echo=FALSE}
 
 #Model 1: STL + ETS
 ETS_ng_scores <- accuracy(ETS_ng$mean,ts_ng_test)  
@@ -317,7 +306,7 @@ NN_ng_scores <- accuracy(Neural_ng_forecast$mean,ts_ng_test)
 ```
 
 ### Compare performance metrics
-```{r}
+```{r, echo=FALSE}
 # Make it a data frame
 scores_load <- as.data.frame(
   rbind(ETS_scores, ARIMA_scores, TBATS_scores, NN_scores)
@@ -340,7 +329,7 @@ kbl(scores_load,
 ```
 
 ### Plotting everything together
-```{r}
+```{r, echo=FALSE}
 autoplot(ts_ng_test) +
   autolayer(ETS_ng, PI=FALSE, series="STL+ETS") +
   autolayer(ARIMA_f_forecast, PI=FALSE, series="ARIMA + Fourier") +
@@ -358,7 +347,7 @@ Summarize your major findings from your analyses in a few paragraphs and plots. 
 
 ## Final Forecast NG : ARIMA + Fourier is the best-fit model
 
-```{r ARIMA, echo=TRUE, message=FALSE, warning=FALSE}
+```{r ARIMA, echo=FALSE, message=FALSE, warning=FALSE}
 
 ARIMA_f_ng_final <- auto.arima(ng_ts, 
                                 seasonal=FALSE, 
@@ -396,24 +385,35 @@ print(ARIMA_ng_df)
 ```
 
 Ayoung: (Conclusion - NG)
-Based on the testing with 4 models, STL+ETS, ARIMA + Fourier, TBATS, Neural Network, and figured out that ARIMA with fourier terms is the best fitting model for the Natural Gas data.
+Based on testing with four models—STL + ETS, ARIMA with Fourier terms, TBATS, and a Neural Network—it was found that the ARIMA model with Fourier terms provided the best fit for the natural gas data. While the STL + ETS model serves as a good baseline, it falls short in capturing more nuanced patterns, such as those present in natural gas generation. Due to the strength of the ARIMA model with Fourier terms in handling strong seasonality, this study assumed it would be the best-performing model. The results confirmed this assumption, as it achieved the lowest RMSE and MAE values among the models tested.
+
+Although the TBATS model fit the training data well, its forecasts were erratic, suggesting possible overfitting. TBATS and STL + ETS models tended to overpredict more than the other models, as indicated by their higher ME values. In fact, all models slightly overpredicted on average, given that all ME values were positive. The Neural Network (NN) model appeared to be too complex for the natural gas dataset, with higher RMSE and MAE values implying overfitting and poor generalization.
+
+The forecasted values for 2025 showed little change before and after the onset of the Russia-Ukraine war. The natural gas dataset exhibited strong, consistent seasonality throughout the years, seemingly following normal seasonal trends. Although this study initially assumed that the war would have a more significant impact, the actual effect on natural gas usage was less than expected.
+
+In conclusion, this study found that natural gas is likely to maintain a stable role in Germany’s electricity grid mix. The Russia-Ukraine war did not appear to significantly affect the energy mix in terms of natural gas usage.
 
 
 Lucy: (Conclusion - Renewables)
 
+Ayoung: Limitations and Further Analysis 
 
-(Insights on how to improve the model - NG)
+One limitation of this study is that it focused solely on the electricity mix component of natural gas usage, excluding its role in heating, which accounts for approximately 44% of Germany’s imported natural gas consumption. This omission likely contributed to the observed minor changes in natural gas usage, as the impact on the electricity sector alone may not fully capture the broader implications of shifts in energy policy or geopolitical events.
 
+For future research, it is recommended to conduct a comprehensive analysis of the heating sector, where more significant changes in natural gas usage are anticipated. Additionally, future studies should expand the scope to include an analysis of the overall electricity mix, incorporating other energy sources and relevant parameters to provide a more holistic understanding of the energy system.
 
+Furthermore, it is suggested that future research explore forecasting not only the quantities of natural gas and renewable energy but also their price dynamics. This would provide deeper insights into market behavior and inform energy policy planning more effectively.
+
+**AI was used to check grammar
 
 
 
 #### Reference 
-(Maliszewska-Nienartowicz, 2024)
-(Luschini, Rego & Montebello, 2024)
-(Umbach, 2022) :https://www.gisreportsonline.com/r/german-gas-policy/
+Maliszewska-Nienartowicz, J. (2024). Impact of Russia's invasion of Ukraine on renewable energy development in Germany and Italy. Utilities Policy, 87, 101731.
 
+Luschini, A. C., Rego, E. E., & Montebello, N. (2024). How did the Russia–Ukraine war impact energy imports and electricity generation? A comparative analysis between Germany and the United Kingdom. The Electricity Journal, 37(3), 107396.
 
+Umbach, F. (2022, September 8). Risks and requirements for German gas and energy policy. GIS Reports. https://www.gisreportsonline.com/r/german-gas-policy/
 
 
 
