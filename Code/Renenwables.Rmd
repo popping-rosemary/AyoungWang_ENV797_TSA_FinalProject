@@ -142,8 +142,11 @@ autoplot(ts_renewable_test)
 ## ARIMA
 
 ```{r, fig.dim=(4,6)}
-ARIMA_autofit <- auto.arima(ts_renewable_train)
-print(ARIMA_autofit)
+ARIMA_autofit_re <- auto.arima(ts_renewable_train)
+print(ARIMA_autofit_re)
+
+ARIMA_autofit_ng <- auto.arima(ts_ng_train)
+print(ARIMA_autofit_ng)
 
 ARIMA_forecast <- forecast(object = ARIMA_autofit, h = 12)
 
@@ -185,19 +188,6 @@ autoplot(renewable_ts) +
 
 
 ### Model 2: ARIMA + FOURIER terms
-
-Since we have multiple seasonalities, the SARIMA model will not work.
-But we can work with an ARIMA model with Fourier terms for each seasonal period.
-This models is known as a dynamic harmonic regression model with an ARMA error structure.
-We will use a log transformation (`lambda=0`) in the `auto.arima()` to ensure the forecasts and prediction intervals remain positive.
-And for the fourier terms we will use function `fourier()` from package `forecast`.
-The number of fourier terms needed is specified in argument `K=`.
-K should be a vector of integers specifying the number of sine and cosine terms for each of the seasonal periods.
-Ideally K is chosen to minimize the AICc, but we will not go over it.
-
-Fourier terms are used to model the seasonal components.
-It resembles the seasonal dummies we used in previous modules, but they are based on trigonometric functions.
-More info on fourier terms [here](https://otexts.com/fpp2/useful-predictors.html#useful-predictors).
 
 ```{r ARIMA, echo=TRUE, message=FALSE, warning=FALSE}
 #Fit arima model with fourier terms as exogenous regressors
@@ -241,12 +231,6 @@ autoplot(ts_renewable_2015) +
 
 ### Model 3: TBATS
 
-BATS is Exponential smoothing state space model with **B**ox-Cox transformation, **A**RMA errors, **T**rend and **S**easonal components.
-TBATS is a trigonometric seasonal variation of BATS.
-A Box Cox transformation is a transformation of non-normal dependent variables into a normal shape.
-
-More info on BATS and TBATS with corresponding equations [here](https://forecasters.org/wp-content/uploads/gravity_forms/7-2a51b93047891f1ec3608bdbd77ca58d/2014/06/Blaconá_MT_ISF2014.pdf.pdf).
-
 ```{r TBATS, echo=TRUE, message=FALSE, warning=FALSE, fig.dim=(4,6)}
 # TBATS can take time to fit
 TBATS_fit <- tbats(ts_renewable_train)
@@ -274,14 +258,6 @@ autoplot(ts_renewable_2015) +
 ```
 
 ### Model 4: Neural Network Time Series Forecasts
-
-There is a function in package `forecast` called `nnetar()` that will fit a feed-forward neural networks model to a time series.
-
-A feed-forward neural network is fitted with lagged values of the series as inputs.
-The inputs are for lags 1 to p, and lags s to sP where `s=frequency(y)`.
-If xreg is provided, its columns are also used as inputs.
-The network is trained for one-step forecasting.
-Multi-step forecasts are computed recursively.
 
 For non-seasonal data, the fitted model is denoted as an NNAR(p,k) model, where k is the number of hidden nodes.
 This is analogous to an AR(p) model but with nonlinear functions.

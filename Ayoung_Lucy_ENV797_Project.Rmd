@@ -4,12 +4,72 @@ subtitle: "[Github](https://github.com/popping-rosemary/AyoungWang_ENV797_TSA_Fi
 author: "Ayoung Kim, Lucy Wang"
 output: pdf_document
 geometry: margin=2.54cm
-mainfont: "Times New Roman"
 ---
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, fig.dim = c(8, 6))
+knitr::opts_chunk$set(echo = FALSE)
 ```
 
+## Instructions to Complete your Project Report
+
+### General Guidelines
+
+1. Use Rmd for your final report.
+
+2. Write in scientific style, not narrative style.
+
+3. [Global options for R chunks](https://rmarkdown.rstudio.com/lesson-3.html) should be set so that only relevant output is displayed. Turn on/off messages and warnings when applicable to avoid unnecessary outputs on the pdf.
+
+4. Make sure your final knitted PDF looks professional. Format tables, figures, chapters, etc.
+
+5. Make sure you add a link to you Github repository in the final report. If you're using public data. Make the repository public. If using private data, make it private and please send me an invitation to collaborate. Otherwise, I will not be able to access your repository.
+
+6. Make sure the PDF file has the file name "Lastname1_Lastname2_Lastname3_ENV797_Project.pdf" and submit it to Sakai under A09 - Final Project - Part III. You will only submit your PDF file. One submission per group.
+
+### Contents of the Report 
+
+#### Introduction, Motivation, Relevance, Objectives
+
+Write a few paragraphs detailing the rationale for your study. This should include both the context of the topic as well as a rationale for your choice of dataset (reason for location, variables, etc.). You may choose to include citations if you like or any other reference you may have used during the project (optional).
+1) Context of topic (Done)
+2) Reason for location (Done), variables including the rationale for my choice of dataset (Done) 
+3) Citations (Done)
+
+Paragraph:
+Several European countries, including Germany, had relied heavily on imported fossil fuels, particularly natural gas from Russia, before the Ukraine-Russia war broke out in February 2023 (Maliszewska-Nienartowicz, 2024). According to data on German gas imports in 2020 (BP), 55.2% of imported gas came from Russia (Umbach, 2022). However, the onset of the war disrupted the energy market across Europe, especially impacting Germany's energy supply. In response, Germany reactivated coal plants, shifting back from natural gas—considered a cleaner energy source—to coal (Luschini, Rego & Montebello, 2024). Significant changes in Germany’s energy mix and market were anticipated, and the energy crisis highlighted the urgent need for a transition to renewable energy to enhance energy security by reducing dependence on imported energy sources (Maliszewska-Nienartowicz, 2024).
+In this context, we aimed to investigate how the Ukraine-Russia war (2023) actually affected Germany’s energy mix, particularly regarding Natural Gas and Renewables.
+
+This project focused specifically on changes in Germany's electricity generation mix. Although Natural Gas plays a primary role in heating and cooling—accounting for 44% of total imported natural gas usage—this study sought to forecast how the role of Natural Gas may evolve in Germany’s electricity sector and the subsequent impacts on the adoption of Renewables post Ukraine-Russia war. 
+
+Lucy: (Description - Energy Security, Policy & Market, Renewable Transition), Objectives 
+
+Throughout this project, the analyses are based on monthly electricity production data from the International Energy Agency (IEA).
+
+#### Dataset information
+
+The entire analysis was based on the Monthly Electricity Production data from the International Energy Agency (IEA)'s Monthly Electricity Statistics iin csv (https://www.iea.org/data-and-statistics/data-product/monthly-electricity-statistics). 
+The dataset consists of the following columns: Country, Time, Balance, Product, Value, and Unit. It contains monthly electricity mix data by energy source from January 2010 to December 2024, covering countries such as Australia, Denmark, Germany, Iceland, Ireland, Japan, and Korea, among others. In the "Product" column, energy sources include Hydro, Coal/Peat & Manufactured Gas, Oil and Petroleum Products, Natural Gas, and Total Renewables (comprising Hydro, Geothermal, Solar, Wind, and Other). Our team cleaned the dataset and filtered it to include only Germany, Total Renewables, and Natural Gas. All units are in GWh.
+
+```{r, warning=FALSE, echo=FALSE}
+library(knitr)
+
+#Table 
+summary_germany <- data.frame(
+  Variable = c("Range", "Unit", "Central Tendency", "Source"),
+  Natural_Gas = c("2010/01/01 - 2024/12/31", "GWh", "Mean: 6419.49", "IEA"),
+  Renewables = c("2010/01/01 - 2024/12/31", "GWh", "Mean: 16835.20", "IEA")
+)
+
+kable(summary_germany, caption = "Summary Table for Energy Mix in Germany")
+```
+#### Analysis (Methods and Models) - Lucy 
+
+Describe the analysis and tests that were performed. Described the components of the time series you identified. List any packages and functions used. Include visualizations of your dataset (i.e. time series plot, ACF, PACF, etc). 
+
+Format your R chunks so that graphs are displayed but code is not displayed. Accompany these graphs with text sections that describe the visualizations and provide context for further analyses.
+
+Each figure should be accompanied by a caption, and referenced within the text if applicable.
+
+## Natural Gas Analysis
 
 ```{r packages, warning=FALSE, message=FALSE, echo=FALSE}
 library(lubridate)
@@ -24,6 +84,7 @@ library(zoo)
 library(kableExtra)
 ```
 
+### NG- Import data file 
 ```{r data file, echo=FALSE}
 ng_data <- read.csv(
   file="./Data/IEA_MonthlyElectricityProduction_1224.csv",
@@ -35,141 +96,18 @@ ng_data <- read.csv(
   arrange(Time) %>% 
   filter(Time>="2010-01-01")
 
-renewable_data <- read.csv(
-  file="./Data/IEA_MonthlyElectricityProduction_1224.csv",
-  header=TRUE,
-  skip=8) %>% 
-  filter(Country=="Germany") %>% 
-  filter(Product == "Total Renewables (Hydro, Geo, Solar, Wind, Other)") %>% 
-  mutate(Time = my(Time) ) %>% 
-  arrange(Time) %>% 
-  filter(Time>="2010-01-01")
 ```
 
+### NG - MSTS 
 
-```{r msts, echo=FALSE}
-renewable_ts <- msts(renewable_data$Value, start = c(2010,1), seasonal.periods = c(12))
+```{r , echo=FALSE}
 ng_ts <- msts(ng_data$Value, start = c(2010,1), seasonal.periods = c(12))
+
+#check stationarity
+adf.test(ng_ts)
 ```
 
-## Introduction, Motivation, Relevance, Objectives
-
-Write a few paragraphs detailing the rationale for your study. This should include both the context of the topic as well as a rationale for your choice of dataset (reason for location, variables, etc.). You may choose to include citations if you like or any other reference you may have used during the project (optional).
-1) Context of topic (Done)
-2) Reason for location (Done), variables including the rationale for my choice of dataset (Done) 
-3) Citations (Done)
-
-Several European countries, including Germany, had relied heavily on imported fossil fuels, particularly natural gas from Russia, before the Ukraine-Russia war broke out in February 2023 (Maliszewska-Nienartowicz, 2024). According to data on German gas imports in 2020 (BP), 55.2% of imported gas came from Russia (Umbach, 2022). However, the onset of the war disrupted the energy market across Europe, especially impacting Germany's energy supply. In response, Germany reactivated coal plants, shifting back from natural gas—considered a cleaner energy source—to coal (Luschini, Rego & Montebello, 2024). Significant changes in Germany’s energy mix and market were anticipated, and the energy crisis highlighted the urgent need for a transition to renewable energy to enhance energy security by reducing dependence on imported energy sources (Maliszewska-Nienartowicz, 2024).
-
-Under Germany's Renewable Energy Act, the country's renewable energy share of the total electricity generation has reached over 62% in 2024, hitting the historical highest (Collins et al., 2025). It is speculated that the Russia-Ukraine war has accelerated Germany's renewable energy transition (Curry, 2022). In this context, we aimed to investigate how the Ukraine-Russia war (2023) actually affected Germany’s energy mix, particularly regarding Natural Gas and Renewables.
-
-## Motivations & Relevance 
-
-This project focuses specifically on changes in Germany's electricity generation mix. Although Natural Gas plays a primary role in heating and cooling—accounting for 44% of total imported natural gas usage—this study sought to forecast how the role of Natural Gas may evolve in Germany’s electricity sector and the subsequent impacts on the adoption of Renewables post Ukraine-Russia war. Forecasting how the Natural Gas and Renewable Energy generation will change in the subsequent year (2025) will help policymakers make decisions regarding the country's energy security and clean energy transition goals. 
-
-## Objectives 
-
-1. Understand how the electricity generation of Renewables and Natural Gas has changed over time;
-2. Interpret Germany's electricity mix and how it might be affected by the Russia-Ukraine War; 
-3. Estimate how the electricity generation of Renewables and Natural Gas will change in 2025. 
-
-## Dataset information
-
-The entire analysis is based on the [Monthly Electricity Production data](https://www.iea.org/data-and-statistics/data-product/monthly-electricity-statistics) from the International Energy Agency (IEA)'s Monthly Electricity Statistics in csv format. The dataset consists of the following columns: Country, Time, Balance, Product, Value, and Unit. It contains monthly electricity mix data by energy source from January 2010 to December 2024, covering countries such as Australia, Denmark, Germany, Iceland, Ireland, Japan, and Korea, among others. In the "Product" column, energy sources include Hydro, Coal/Peat & Manufactured Gas, Oil and Petroleum Products, Natural Gas, and Total Renewables (comprising Hydro, Geothermal, Solar, Wind, and Other). Our team cleaned the dataset and filtered it to include only Germany, Total Renewables, and Natural Gas. All units are in GWh.
-
-```{r, warning=FALSE, echo=FALSE}
-library(knitr)
-
-#Table 
-summary_germany <- data.frame(
-  Variable = c("Range", "Unit", "Central Tendency", "Source"),
-  Natural_Gas = c("2010/01/01 - 2024/12/31", "GWh", "Mean: 6419.49", "IEA"),
-  Renewables = c("2010/01/01 - 2024/12/31", "GWh", "Mean: 16835.20", "IEA")
-)
-
-kable(summary_germany, caption = "Summary Table for Energy Mix in Germany")
-```
-
-## Methods
-
-To forecast electricity generation from Natural Gas (NG) and Renewables (RE), we employed a structured time series analysis approach combining exploratory data analysis (EDA), autocorrelation diagnostics, multiple forecasting models, and model accuracy evaluation.
-
-### Exploratroy Data Analysis
-
-Our EDA began with visual inspections of the **raw generation trends**, which revealed a clear upward trajectory in renewables and pronounced seasonal fluctuations in natural gas. 
-
-```{r initial plots, message=FALSE, Warning=FALSE}
-ts_plot <- 
-  autoplot(renewable_ts, series = "Renewables", aes(color=group)) +
-      autolayer(ng_ts, series= "Natural Gas")+
-      theme_minimal()+
-      ggtitle("Total Renewables vs. Natural Gas Monthly Net Generation, 2010-2024")+
-      ylab("Net Generation")+
-      xlab("Year")
-plot(ts_plot)
-
-```
-
-We then conducted **ACF and PACF analyses** to investigate the underlying temporal structure. For RE, the ACF showed slow decay and no sharp seasonal lags, suggesting a strong trend but weak or irregular seasonality. In contrast, NG displayed prominent spikes at lags 12, 24, and 36, indicating strong annual seasonality and cyclical demand patterns.
-
-```{r ACF & PACF}
-#ACF and PACF plots
-par(mfrow=c(2,2))
-ACF_re_plot <- Acf(renewable_ts, lag = 40, plot = TRUE,main="ACF RE")
-PACF_re_plot <- Pacf(renewable_ts, lag = 40, plot = TRUE,main="PACF RE")
-ACF_ng_plot <- Acf(ng_ts, lag = 40, plot = TRUE,main="ACF NG")
-PACF_ng_plot <- Pacf(ng_ts, lag = 40, plot = TRUE,main="PACF NG")
-par(mfrow=c(1,1))
-
-```
-
-**STL decomposition** was used to break down the time series of renewable and natural gas electricity generation into trend, seasonal, and remainder components. For renewables, the decomposition revealed a strong upward trend. However, the seasonal component was relatively modest in magnitude and showed irregular patterns, indicating weak to moderate seasonality. This is further quantified by the seasonal strength score of 0.3, which falls below the commonly used threshold of 0.6 for strong seasonality. 
-In contrast, the STL decomposition for natural gas showed highly regular and dominant seasonal patterns, with clearly defined annual cycles aligned with heating and cooling demand. The trend component fluctuated over time, reflecting shifts in energy market dynamics and possible substitution effects. The seasonal strength score of 0.8 confirms that natural gas generation exhibits strong and consistent seasonality.
-
-```{r Decomposition}
-# STL decomposition (Seasonal-Trend-Residual)
-renewable_stl <- stl(renewable_ts, s.window = "periodic")
-autoplot(renewable_stl) +
-  ggtitle("STL Decomposition - Renewables")+
-  theme_minimal()
-
-# Seasonal strength test (using STL components)
-season_strength_RE <- 1 - (var(renewable_stl$time.series[, "remainder"]) /
-                        var(renewable_stl$time.series[, "remainder"] +
-                            renewable_stl$time.series[, "seasonal"]))
-cat("Estimated Seasonal Strength for Renewables:", round(season_strength_RE, 3), "\n")
-
-ng_stl <- stl(ng_ts, s.window = "periodic")
-autoplot(ng_stl) +
-  ggtitle("STL Decomposition - NG")+
-  theme_minimal()
-
-season_strength_NG <- 1 - (var(ng_stl$time.series[, "remainder"]) /
-                        var(ng_stl$time.series[, "remainder"] +
-                            ng_stl$time.series[, "seasonal"]))
-cat("Estimated Seasonal Strength for Natural Gas:", round(season_strength_NG, 3), "\n")
-```
-
-### Model Description
-
-Based on these insights, we selected four forecasting models for testing purpose: 
-
-1. **ARIMA with Fourier terms**:  We extended ARIMA with Fourier terms as exogenous regressors, enabling the model to approximate periodic behaviors without enforcing strict seasonality.
-2. **STL+ETS**: This model decomposes the time series into trend, seasonal, and remainder components before applying exponential smoothing for forecasting, which is especially useful for data with evolving seasonal patterns.
-3. **TBATS**: Trigonometric, Box-Cox, ARMA errors, Trend, and Seasonal. This model supports complex seasonal structures and proved particularly effective for renewable series.
-4. **Neural Network Autoregression (NNAR)**: This models nonlinear relationships and includes lagged values and optional Fourier terms to handle multiple seasonality.
-
-The data in time range 2010-2023 is used for training, and 2024 data is used for testing. The model results are then evaluated based on accuracy metrics including RMSE, MAE, MAPE, ACF1, and Theil’s U. The best-performing model is selected to forecast monthly generation in 2025. 
-
-For renewables, we tested models including **STL+ETS**, **ARIMA with Fourier terms**, **TBATS**, and **Neural Network Autoregression (NNAR)**, ultimately finding TBATS to be the best-performing model based on RMSE and residual diagnostics. For natural gas, the strong seasonality justified the use of **ARIMA + Fourier terms**, which allowed us to model complex recurring patterns explicitly. The models were evaluated using standard forecast accuracy metrics (RMSE, MAE, MAPE, ACF1, and Theil’s U), and our final forecasts captured both short-term dynamics and long-term structural changes in the generation mix.
-
-***
-Describe the analysis and tests that were performed. Described the components of the time series you identified. List any packages and functions used. Include visualizations of your dataset (i.e. time series plot, ACF, PACF, etc). 
-
-Format your R chunks so that graphs are displayed but code is not displayed. Accompany these graphs with text sections that describe the visualizations and provide context for further analyses.
-
-Each figure should be accompanied by a caption, and referenced within the text if applicable.
-***
+p-value < 0.05. The time series is stationary. 
 
 ### NG - Initial Plots
 
@@ -190,6 +128,8 @@ ng_stl <- stl(ng_ts, s.window = "periodic")
 autoplot(ng_stl) +
   ggtitle("STL Decomposition - NG")+
   theme_minimal()
+
+
 ```
 
 ```{r, message=FALSE, warning=FALSE, echo=FALSE}
@@ -472,14 +412,12 @@ Furthermore, it is suggested that future research explore forecasting not only t
 
 
 
-## References 
+#### Reference 
 Maliszewska-Nienartowicz, J. (2024). Impact of Russia's invasion of Ukraine on renewable energy development in Germany and Italy. Utilities Policy, 87, 101731.
 
 Luschini, A. C., Rego, E. E., & Montebello, N. (2024). How did the Russia–Ukraine war impact energy imports and electricity generation? A comparative analysis between Germany and the United Kingdom. The Electricity Journal, 37(3), 107396.
 
 Umbach, F. (2022, September 8). Risks and requirements for German gas and energy policy. GIS Reports. https://www.gisreportsonline.com/r/german-gas-policy/
 
-Collins, J., Wettengel, K. A. H., Appunn, K., Haas, Y., Wettengel, J., & Wehrmann, B. (2025, January 15). Germany’s electricity mix in 2024 “cleanest ever” – researchers. Clean Energy Wire. https://www.cleanenergywire.org/news/germanys-electricity-mix-2024-cleanest-ever-researchers 
 
-Curry, A. (2022, May 6). How the Ukraine War is accelerating Germany’s Renewable Energy Transition. Environment. https://www.nationalgeographic.com/environment/article/how-the-ukraine-war-is-accelerating-germanys-renewable-energy-transition 
 
