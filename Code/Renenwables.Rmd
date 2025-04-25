@@ -269,7 +269,7 @@ For seasonal data, the fitted model is called an NNAR(p,P,k)[m] model, which is 
 #NN_fit <- nnetar(ts_act_power_daily_train,p=1,P=1)
 NN_fit <- nnetar(ts_renewable_train,
                  p=1,
-                 P=1,
+                 P=0,
                  xreg=fourier(ts_renewable_train, K=c(2)))
 
 #NN_for <- forecast(NN_fit, h=365) 

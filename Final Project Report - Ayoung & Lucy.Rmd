@@ -7,9 +7,8 @@ geometry: margin=2.54cm
 mainfont: "Times New Roman"
 ---
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, fig.dim = c(8, 6))
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE, fig.height = 4)
 ```
-
 
 ```{r packages, warning=FALSE, message=FALSE, echo=FALSE}
 library(lubridate)
@@ -22,8 +21,9 @@ library(tidyverse)
 library(smooth)
 library(zoo)
 library(kableExtra)
+library(cowplot)
+library(kableExtra)
 ```
-
 ```{r data file, echo=FALSE}
 ng_data <- read.csv(
   file="./Data/IEA_MonthlyElectricityProduction_1224.csv",
@@ -45,19 +45,12 @@ renewable_data <- read.csv(
   arrange(Time) %>% 
   filter(Time>="2010-01-01")
 ```
-
-
 ```{r msts, echo=FALSE}
 renewable_ts <- msts(renewable_data$Value, start = c(2010,1), seasonal.periods = c(12))
 ng_ts <- msts(ng_data$Value, start = c(2010,1), seasonal.periods = c(12))
 ```
 
-## Introduction, Motivation, Relevance, Objectives
-
-Write a few paragraphs detailing the rationale for your study. This should include both the context of the topic as well as a rationale for your choice of dataset (reason for location, variables, etc.). You may choose to include citations if you like or any other reference you may have used during the project (optional).
-1) Context of topic (Done)
-2) Reason for location (Done), variables including the rationale for my choice of dataset (Done) 
-3) Citations (Done)
+## Introduction
 
 Several European countries, including Germany, had relied heavily on imported fossil fuels, particularly natural gas from Russia, before the Ukraine-Russia war broke out in February 2023 (Maliszewska-Nienartowicz, 2024). According to data on German gas imports in 2020 (BP), 55.2% of imported gas came from Russia (Umbach, 2022). However, the onset of the war disrupted the energy market across Europe, especially impacting Germany's energy supply. In response, Germany reactivated coal plants, shifting back from natural gas—considered a cleaner energy source—to coal (Luschini, Rego & Montebello, 2024). Significant changes in Germany’s energy mix and market were anticipated, and the energy crisis highlighted the urgent need for a transition to renewable energy to enhance energy security by reducing dependence on imported energy sources (Maliszewska-Nienartowicz, 2024).
 
@@ -112,7 +105,7 @@ plot(ts_plot)
 
 We then conducted **ACF and PACF analyses** to investigate the underlying temporal structure. For RE, the ACF showed slow decay and no sharp seasonal lags, suggesting a strong trend but weak or irregular seasonality. In contrast, NG displayed prominent spikes at lags 12, 24, and 36, indicating strong annual seasonality and cyclical demand patterns.
 
-```{r ACF & PACF}
+```{r ACF & PACF, fig.height = 6}
 #ACF and PACF plots
 par(mfrow=c(2,2))
 ACF_re_plot <- Acf(renewable_ts, lag = 40, plot = TRUE,main="ACF RE")
@@ -154,45 +147,15 @@ cat("Estimated Seasonal Strength for Natural Gas:", round(season_strength_NG, 3)
 
 Based on these insights, we selected four forecasting models for testing purpose: 
 
-1. **ARIMA with Fourier terms**:  We extended ARIMA with Fourier terms as exogenous regressors, enabling the model to approximate periodic behaviors without enforcing strict seasonality.
-2. **STL+ETS**: This model decomposes the time series into trend, seasonal, and remainder components before applying exponential smoothing for forecasting, which is especially useful for data with evolving seasonal patterns.
-3. **TBATS**: Trigonometric, Box-Cox, ARMA errors, Trend, and Seasonal. This model supports complex seasonal structures and proved particularly effective for renewable series.
-4. **Neural Network Autoregression (NNAR)**: This models nonlinear relationships and includes lagged values and optional Fourier terms to handle multiple seasonality.
+1. **Baseline ARIMA**: We began with a baseline ARIMA model, which captures autoregressive and moving average dependencies in the data. 
+2. **ARIMA with Fourier terms**:  To better accommodate irregular or weak seasonal patterns in renewables, we extended ARIMA with Fourier terms as exogenous regressors, enabling the model to approximate periodic behaviors without enforcing strict seasonality.
+3. **STL+ETS**: This model decomposes the time series into trend, seasonal, and remainder components before applying exponential smoothing for forecasting, which is especially useful for data with evolving seasonal patterns.
+4. **TBATS**: Trigonometric, Box-Cox, ARMA errors, Trend, and Seasonal. This model supports complex seasonal structures and proved particularly effective for renewable series.
+5. **Neural Network Autoregression (NNAR)**: This models nonlinear relationships and includes lagged values and optional Fourier terms to handle multiple seasonality.
 
 The data in time range 2010-2023 is used for training, and 2024 data is used for testing. The model results are then evaluated based on accuracy metrics including RMSE, MAE, MAPE, ACF1, and Theil’s U. The best-performing model is selected to forecast monthly generation in 2025. 
 
-For renewables, we tested models including **STL+ETS**, **ARIMA with Fourier terms**, **TBATS**, and **Neural Network Autoregression (NNAR)**, ultimately finding TBATS to be the best-performing model based on RMSE and residual diagnostics. For natural gas, the strong seasonality justified the use of **ARIMA + Fourier terms**, which allowed us to model complex recurring patterns explicitly. The models were evaluated using standard forecast accuracy metrics (RMSE, MAE, MAPE, ACF1, and Theil’s U), and our final forecasts captured both short-term dynamics and long-term structural changes in the generation mix.
-
-***
-Describe the analysis and tests that were performed. Described the components of the time series you identified. List any packages and functions used. Include visualizations of your dataset (i.e. time series plot, ACF, PACF, etc). 
-
-Format your R chunks so that graphs are displayed but code is not displayed. Accompany these graphs with text sections that describe the visualizations and provide context for further analyses.
-
-Each figure should be accompanied by a caption, and referenced within the text if applicable.
-***
-
-### NG - Initial Plots
-
-```{r, echo=FALSE}
-#Plot for Natural Gas
-ng_ts_plot <- autoplot(ng_ts)+
-  ylab("Natural Gas")
-
-plot(ng_ts_plot)
-
-#ACF and PACF plots
-par(mfrow=c(1,2))
-ACF_ng_plot <- Acf(ng_ts, lag = 40, plot = TRUE,main="ACF of Natural Gas")
-PACF_ng_plot <- Pacf(ng_ts, lag = 40, plot = TRUE,main="ACF of Natural Gas")
-par(mfrow=c(1,1))
-
-ng_stl <- stl(ng_ts, s.window = "periodic")
-autoplot(ng_stl) +
-  ggtitle("STL Decomposition - NG")+
-  theme_minimal()
-```
-
-```{r, message=FALSE, warning=FALSE, echo=FALSE}
+```{r data for training and testing, message=FALSE, warning=FALSE, echo=FALSE}
 #create a subset for training purpose
 n_for = 12
 ts_ng_train <- subset(ng_ts,
@@ -201,56 +164,102 @@ ts_ng_train <- subset(ng_ts,
 #create a subset for testing purpose
 ts_ng_test <- subset(ng_ts,start = length(ng_ts)-n_for)
 
-autoplot(ts_ng_train)
-autoplot(ts_ng_test)
+ts_renewable_train <- subset(renewable_ts,
+                                   end = length(renewable_ts)-n_for)
+
+#create a subset for testing purpose
+ts_renewable_test <- subset(renewable_ts,
+                                   start = length(renewable_ts)-n_for)
+
+#create a subset for displaying purpose
+ts_renewable_2015 <- subset(renewable_ts,
+                                   start = length(renewable_ts)-120)
+
+ts_ng_2015 <- subset(ng_ts,
+                                   start = length(ng_ts)-120)
+
+plot_grid(
+  autoplot(ts_ng_train) +theme_minimal()+ggtitle("Training TS - NG"),
+  autoplot(ts_ng_test)+theme_minimal()+ggtitle("Testing TS - NG"),
+  nrow=1
+)
+
+plot_grid(
+  autoplot(ts_renewable_train) +theme_minimal()+ggtitle("Training TS - RE"),
+  autoplot(ts_renewable_test)+theme_minimal()+ggtitle("Testing TS - RE"),
+  nrow=1
+)
 ```
 
-### NG - Model 1: STL + ETS
+## Analysis
 
-```{r ETS, echo=FALSE, message=FALSE, warning=FALSE}
-#Fit and forecast STL + ETS model to data
-ETS_ng <- stlf(ts_ng_train,h=12)
+### Baseline ARIMA 
 
-#Plot foresting results
-autoplot(ETS_ng) + ylab("Production")
+Using auto.arima(), (p,d,q) and (P,D,Q) are (1,1,1) and (0,0,2) for Renewables, and (2,0,2) and (2,1,0) for Natural Gas. 
 
+```{r}
+ARIMA_autofit_re <- auto.arima(ts_renewable_train)
 
-autolayer(ETS_ng, series="STL + ETS")+
-  autolayer(ts_ng_train, series="observed", PI=FALSE, color="black")+
-  ylab("Generation") + 
-  ylim(10000,33000)+
-  theme_minimal()
+ARIMA_autofit_ng <- auto.arima(ts_ng_train)
 
-#Plot model + observed data
-autoplot(ng_ts) +
-  autolayer(ETS_ng, series = "STL + ETS", PI = FALSE) +
-  ylab("Generation") +
-  ggtitle("EST Model - Natural Gas")+
-  theme_minimal()
+ARIMA_forecast_re <- forecast(object = ARIMA_autofit_re, h = 12)
 
-#Plot model + observed data
-autoplot(ng_ts) +
-  autolayer(ETS_ng, series="STL + ETS",PI=FALSE) +
+ARMIA_plot_re <- autoplot(renewable_ts) +
+  autolayer(ARIMA_forecast_re, series="ARIMA",PI=FALSE) +
   ylab("Generation")+
-  ggtitle("ETS Model - Natural Gas")+
-  theme_minimal()
+  theme_minimal()+
+  theme(legend.position = "bottom")+
+  ggtitle("ARIMA - RE")
 
+ARIMA_forecast_ng <- forecast(object = ARIMA_autofit_ng, h = 12)
+
+ARMIA_plot_ng <- autoplot(ng_ts) +
+  autolayer(ARIMA_forecast_ng, series="ARIMA",PI=FALSE) +
+  ylab("Generation")+
+  theme_minimal()+
+  theme(legend.position = "bottom")+
+  ggtitle("ARIMA - NG")
+
+plot_grid(
+  ARMIA_plot_re,
+  ARMIA_plot_ng,
+  nrow=1
+)
 ```
 
 ### NG - Model 2: ARIMA + FOURIER terms
 
-```{r ARIMA, echo=TRUE, message=FALSE, warning=FALSE}
-#Simple ARIMA 
-ARIMA_ng<-auto.arima(ts_ng_train)
-print(ARIMA_ng)
+```{r ARIMA RE}
+ARIMA_Four_fit <- auto.arima(ts_renewable_train, 
+                             seasonal=FALSE, 
+                             lambda=0,
+                             xreg=fourier(ts_renewable_train, 
+                                          K=c(6))
+                             )
 
-ARIMA_ng_forecast <- forecast(object = ARIMA_ng, h = 12)
+#Forecast with ARIMA fit
+#also need to specify h for fourier terms
+ARIMA_Four_for <- forecast(ARIMA_Four_fit,
+                           xreg=fourier(ts_renewable_train,
+                                        K=c(6),
+                                        h=12),
+                           h=12
+                           ) 
 
-autoplot(ng_ts) +
-  autolayer(ARIMA_ng_forecast, series="ARIMA",PI=FALSE) +
-  ylab("Generation")+
+#Plot combined results
+ARIMA_f_plot_re <- autoplot(renewable_ts) +
+  autolayer(ARIMA_Four_for, series="ARIMA_FOURIER")+
+  autolayer(ts_renewable_test, series="observed", PI=FALSE, color="black")+
+  ylab("Generation") + 
+  ylim(10000,33000)+
   theme_minimal()+
-  ggtitle("ARIMA - NG")
+  theme(legend.position = "bottom")+
+  ggtitle("ARIMA_FOURIER - Renewables")
+
+```
+
+
+```{r ARIMA NG}
 
 ARIMA_f<- auto.arima(ts_ng_train, 
                              seasonal=FALSE, 
@@ -268,57 +277,130 @@ ARIMA_f_forecast <- forecast(ARIMA_f,
                            h=12
                            ) 
 
-#Plot foresting results
-autoplot(ARIMA_f_forecast) + ylab("Production")
-
-#Plot model + observed data
-autoplot(ng_ts) +
-  autolayer(ARIMA_f_forecast, series="ARIMA_FOURIER") +
-  autolayer(ts_ng_test, series="observed", PI=FALSE, color="black")+
-  ylab("Generation")+
-  theme_minimal() +
-  ggtitle("ARIMA_FOURIER - Natural Gas")
-
 #Plot combined results
-autoplot(ng_ts) +
+ARIMA_f_plot_ng <- autoplot(ng_ts) +
   autolayer(ARIMA_f_forecast, series="ARIMA_FOURIER")+
   autolayer(ts_ng_test, series="observed", PI=FALSE, color="black")+
   ylab("Generation") + 
   theme_minimal()+
+  theme(legend.position = "bottom")+
   ggtitle("ARIMA_FOURIER - Natural Gas")
+
+plot_grid(
+  ARIMA_f_plot_re,
+  ARIMA_f_plot_ng,
+  nrow=1
+)
 ```
 
-### NG - Model 3: TBATS
+### NG - Model 3: STL + ETS
 
-```{r TBATS, echo=FALSE, message=FALSE, warning=FALSE}
+```{r ETS RE}
+#Fit and forecast STL + ETS model to data
+ETS_re <-  stlf(ts_renewable_train,h=12)
+
+#Plot foresting results
+ETS_plot_re <- autoplot(renewable_ts) +
+  autolayer(ETS_re, series="STL + ETS")+
+  autolayer(ts_renewable_test, series="observed", PI=FALSE, color="black")+
+  ylab("Generation") + 
+  ylim(10000,33000)+
+  theme_minimal()+
+  theme(legend.position = "bottom")+
+  ggtitle("ETS Model - Renewables")
+  
+```
+
+```{r ETS NG}
+#Fit and forecast STL + ETS model to data
+ETS_ng <- stlf(ts_ng_train,h=12)
+
+#Plot model + observed data
+ETS_plot_ng <- autoplot(ng_ts) +
+  autolayer(ETS_ng, series="STL + ETS") +
+  autolayer(ts_ng_test, series="observed", PI=FALSE, color="black")+
+  ylab("Generation")+
+  ggtitle("ETS Model - Natural Gas")+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
+plot_grid(
+  ETS_plot_re,
+  ETS_plot_ng,
+  nrow=1
+)
+```
+
+### Model 4: TBATS
+
+```{r TBATS RE}
+# TBATS can take time to fit
+TBATS_fit_re <- tbats(ts_renewable_train)
+
+TBATS_for_re <- forecast(TBATS_fit_re, h=12)
+
+#Plot combined results
+TBATS_plot_re <- autoplot(renewable_ts) +
+  autolayer(TBATS_for_re, series="TBATS")+
+  autolayer(ts_renewable_test, series="observed", color="black")+
+  ylab("Generation") + 
+  ylim(10000,33000)+
+  theme_minimal()+
+  theme(legend.position = "bottom")+
+  ggtitle("TBATS - Renewables")
+
+```
+
+```{r TBATS NG}
 # TBATS can take time to fit
 TBATS_ng_fit <- tbats(ts_ng_train)
 
 TBATS_ng_forecast <- forecast(TBATS_ng_fit, h=12)
 
-#Plot foresting results
-autoplot(TBATS_ng_forecast) +
-  ylab("Production") 
-
-#Plot model + observed data
-autoplot(ng_ts) +
-  autolayer(TBATS_ng_forecast, series="TBATS",PI=FALSE)+
-  ylab("Generation") 
-
 #Plot combined results 
-autoplot(ng_ts) +
+TBATS_plot_ng <- autoplot(ng_ts) +
   autolayer(TBATS_ng_forecast, series="TBATS")+
   autolayer(ts_ng_test, series="observed", color="black")+
   ylab("Generation") + 
   theme_minimal()+
+  theme(legend.position = "bottom")+
   ggtitle("TBATS - Natural Gas")
 
+plot_grid(
+  TBATS_plot_re,
+  TBATS_plot_ng,
+  nrow=1
+)
+```
+
+### Model 5: Neural Network Time Series Forecasts
+
+```{r NNETAR RE}
+#NN_fit <- nnetar(ts_act_power_daily_train,p=1,P=1)
+NN_re_fit <- nnetar(ts_renewable_train,
+                 p=1,
+                 P=1,
+                 xreg=fourier(ts_renewable_train, K=c(2)))
+
+#NN_for <- forecast(NN_fit, h=365) 
+NN_re_for <- forecast(NN_re_fit, 
+                   h=12,
+                   xreg=fourier(ts_renewable_train, 
+                                          K=c(2),h=12))
+
+#Plot combined results
+NN_plot_re <- autoplot(renewable_ts) +
+  autolayer(NN_re_for, series="Neural Network")+
+  autolayer(ts_renewable_test, series="observed", color="black")+
+  ylab("Generation") + 
+  ylim(10000,33000)+
+  theme_minimal()+
+  theme(legend.position = "bottom")+
+  ggtitle("NN - Renewables")
 
 ```
 
-### NG - Model 4: Neural Network Time Series Forecasts
-
-```{r NNETAR, echo=FALSE, message=FALSE, warning=FALSE}
+```{r NNETAR NG, echo=FALSE, message=FALSE, warning=FALSE}
 
 Neural_ng_fit <- nnetar(ts_ng_train,
                  p=1,
@@ -330,30 +412,25 @@ Neural_ng_forecast <- forecast(Neural_ng_fit,
                    xreg=fourier(ts_ng_train, 
                                           K=c(2),h=12))
 
-
-#Plot foresting results
-autoplot(Neural_ng_forecast) +
-  ylab("Production") 
-
-
-#Plot model + observed data
-autoplot(ng_ts) +
-  autolayer(Neural_ng_forecast, series="Neural Network",PI=FALSE)+
-  ylab("Production") 
-
 #Plot combined results
-autoplot(ng_ts) +
+NN_plot_ng <- autoplot(ng_ts) +
   autolayer(Neural_ng_forecast, series="Neural Network")+
   autolayer(ts_ng_test, series="observed", color="black")+
   ylab("Generation") + 
   theme_minimal()+
+  theme(legend.position = "bottom")+
   ggtitle("NN - Natural Gas")
 
+plot_grid(
+  NN_plot_re,
+  NN_plot_ng,
+  nrow=1
+)
 ```
 
-### NG - Checking accuracy of the forecast models
+### Accuracy Evaluation
 
-```{r, echo=FALSE}
+```{r accuracy NG, echo=FALSE}
 
 #Model 1: STL + ETS
 ETS_ng_scores <- accuracy(ETS_ng$mean,ts_ng_test)  
@@ -369,49 +446,106 @@ NN_ng_scores <- accuracy(Neural_ng_forecast$mean,ts_ng_test)
 
 ```
 
-### Compare performance metrics
-```{r, echo=FALSE}
+```{r accuracy RE}
+
+#STL + ETS
+ETS_re_scores <- accuracy(ETS_re$mean,ts_renewable_test)  
+
+#ARIMA + Fourier 
+ARIMA_re_scores <- accuracy(ARIMA_Four_for$mean,ts_renewable_test)
+
+#TBATS 
+TBATS_re_scores <- accuracy(TBATS_for_re$mean,ts_renewable_test)
+
+#Neural Network 
+NN_re_scores <- accuracy(NN_re_for$mean,ts_renewable_test)
+
+
+```
+
+```{r accuracy metrics RE, echo=FALSE}
 # Make it a data frame
 scores_load <- as.data.frame(
-  rbind(ETS_scores, ARIMA_scores, TBATS_scores, NN_scores)
+  rbind(ETS_re_scores, ARIMA_re_scores, TBATS_re_scores, NN_re_scores)
 )
 row.names(scores_load) <- c("STL + ETS", "ARIMA + Fourier", "TBATS", "Neural Network")
 
-# Choose model with lowest RMSE
-best_model_load <- which.min(scores_load[,"RMSE"])
-cat("The best model by RMSE is:", row.names(scores_load[best_model_load,]), "\n")
-
-# Create nice kable table
-library(kableExtra)
-
 kbl(scores_load,
-    caption = "Forecast Accuracy for Daily Load",
+    caption = "Forecast Accuracy for Renewables Monthly Generation",
     digits = array(5, ncol(scores_load))) %>%
   kable_styling(full_width = FALSE, position = "center", latex_options = "hold_position") %>%
-  kable_styling(latex_options = "striped", stripe_index = best_model_load)
+  kable_styling(latex_options = "striped")
+
+```
+
+```{r accuracy metrics NG, echo=FALSE}
+# Make it a data frame
+scores_load <- as.data.frame(
+  rbind(ETS_ng_scores, ARIMA_ng_scores, TBATS_ng_scores, NN_ng_scores)
+)
+row.names(scores_load) <- c("STL + ETS", "ARIMA + Fourier", "TBATS", "Neural Network")
+
+kbl(scores_load,
+    caption = "Forecast Accuracy for Natural Gas Monthly Generation",
+    digits = array(5, ncol(scores_load))) %>%
+  kable_styling(full_width = FALSE, position = "center", latex_options = "hold_position") %>%
+  kable_styling(latex_options = "striped")
 
 ```
 
 ### Plotting everything together
-```{r, echo=FALSE}
+
+```{r forecast plots RE, echo=FALSE}
+autoplot(ts_renewable_test) +
+  autolayer(ETS_re, PI=FALSE, series="STL+ETS") +
+  autolayer(ARIMA_Four_for, PI=FALSE, series="ARIMA + Fourier") +
+  autolayer(TBATS_for_re,PI=FALSE, series="TBATS") +
+  autolayer(NN_re_for,PI=FALSE, series="Neural Network") +
+  ylab("Generation") +
+  guides(colour=guide_legend(title="Forecast"))+
+  ggtitle("Renewables Monthly Generation")+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+```
+
+```{r forecast plots NG, echo=FALSE}
 autoplot(ts_ng_test) +
   autolayer(ETS_ng, PI=FALSE, series="STL+ETS") +
   autolayer(ARIMA_f_forecast, PI=FALSE, series="ARIMA + Fourier") +
   autolayer(TBATS_ng_forecast,PI=FALSE, series="TBATS") +
   autolayer(Neural_ng_forecast,PI=FALSE, series="Neural Network") +
-  ylab("Daily Active Power") +
-  guides(colour=guide_legend(title="Forecast"))
+  ylab("Generation") +
+  guides(colour=guide_legend(title="Forecast"))+
+  ggtitle("Natural Gas Monthly Generation")+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+
 ```
 
-#### Summary and Conclusions
+## Summary and Conclusions
 
-*Final forecast under conclusions
+### Final Forecast for Renewables: TBATS is the best-fit model
 
-Summarize your major findings from your analyses in a few paragraphs and plots. What conclusions do you draw from your findings? Any insights on how to improve the model?
+```{r TBATS final RE}
+# TBATS can take time to fit
+TBATS_fit_final <- tbats(renewable_ts)
 
-## Final Forecast NG : ARIMA + Fourier is the best-fit model
+TBATS_for_2025 <- forecast(TBATS_fit_final, h=12)
 
-```{r ARIMA, echo=FALSE, message=FALSE, warning=FALSE}
+#Plot foresting results
+autoplot(TBATS_for_2025) +
+  ylab("Generation") +
+  ggtitle("Net Generation - Total Renewables (TBATS)")+
+  theme_minimal()
+
+```
+Based on testing with four advanced models—STL + ETS, ARIMA with Fourier terms, TBATS, and a Neural Network—it was found that the TBATS model provided the most robust fit for the renewables dataset. While STL + ETS and ARIMA+Fourier served as reasonable baselines, they underperformed in capturing the complex growth patterns and variable fluctuations in renewable generation. The Neural Network model also showed promise but suffered from slightly higher RMSE and residual autocorrelation, suggesting potential overfitting. In contrast, the TBATS model achieved the lowest RMSE (1933.02) and lowest residual autocorrelation (ACF1 = 0.093), indicating it captured both the long-term trend and the irregular seasonal dynamics more effectively than other methods.
+
+Although all models slightly overpredicted renewable output, the forecasted values from TBATS showed a smooth continuation of the growth trend into 2025, consistent with the ongoing expansion of installed renewable capacity in Germany. Unlike natural gas, which showed strong cyclical behavior, the renewable generation data exhibited a dominant trend and relatively weak seasonality. The TBATS forecast reflects this by projecting continued, though slightly tapered, growth in renewable output. 
+
+### Final Forecast for Natural Gas : ARIMA + Fourier is the best-fit model
+
+```{r ARIMA final NG}
 
 ARIMA_f_ng_final <- auto.arima(ng_ts, 
                                 seasonal=FALSE, 
@@ -428,49 +562,31 @@ ARIMA_f_forecast_2025 <- forecast(ARIMA_f_ng_final,
 
 #Plot foresting results
 autoplot(ng_ts)+
-  autolayer(ARIMA_f_forecast_2025, series = "ARIM+FOURIER",PI=FALSE) +
+  autolayer(ARIMA_f_forecast_2025, series = "ARIMA+FOURIER",PI=FALSE) +
   ylab("Generation")+
   ggtitle("Net Generation - Natural Gas (ARIMA+Fourier)")+
-  theme_minimal()
+  theme_minimal()+
+  theme(legend.position = "bottom")
 
-
-
-#Plot model + observed data
-autoplot(ng_ts) +
-  autolayer(ARIMA_f_forecast_2025, series="ARIMA+FOURIER",PI=FALSE)+
-  ylab("Generation") 
-
-for_start = as.Date("2025-01-01") 
-for_end = as.Date("2025-12-01")
-for_period <- format(seq(as.Date(for_start), as.Date(for_end), by = "month"), "%b %Y")
-
-ARIMA_ng_df <- tibble(Time = for_period, NetGen = ARIMA_f_forecast_2025$mean)
-print(ARIMA_ng_df)
 ```
 
-Ayoung: (Conclusion - NG)
-Based on testing with four models—STL + ETS, ARIMA with Fourier terms, TBATS, and a Neural Network—it was found that the ARIMA model with Fourier terms provided the best fit for the natural gas data. While the STL + ETS model serves as a good baseline, it falls short in capturing more nuanced patterns, such as those present in natural gas generation. Due to the strength of the ARIMA model with Fourier terms in handling strong seasonality, this study assumed it would be the best-performing model. The results confirmed this assumption, as it achieved the lowest RMSE and MAE values among the models tested.
+For Natural Gas, it was found that the ARIMA model with Fourier terms provided the best fit. While the STL + ETS model serves as a good baseline, it falls short in capturing more nuanced patterns, such as those present in natural gas generation. Due to the strength of the ARIMA model with Fourier terms in handling strong seasonality, this study assumed it would be the best-performing model. The results confirmed this assumption, as it achieved the lowest RMSE and MAE values among the models tested.
 
 Although the TBATS model fit the training data well, its forecasts were erratic, suggesting possible overfitting. TBATS and STL + ETS models tended to overpredict more than the other models, as indicated by their higher ME values. In fact, all models slightly overpredicted on average, given that all ME values were positive. The Neural Network (NN) model appeared to be too complex for the natural gas dataset, with higher RMSE and MAE values implying overfitting and poor generalization.
 
 The forecasted values for 2025 showed little change before and after the onset of the Russia-Ukraine war. The natural gas dataset exhibited strong, consistent seasonality throughout the years, seemingly following normal seasonal trends. Although this study initially assumed that the war would have a more significant impact, the actual effect on natural gas usage was less than expected.
 
-In conclusion, this study found that natural gas is likely to maintain a stable role in Germany’s electricity grid mix. The Russia-Ukraine war did not appear to significantly affect the energy mix in terms of natural gas usage.
+### Takeaway 
 
+In conclusion, this study suggests that renewable energy will continue to play an expanding role in Germany’s electricity grid, while natural gas is likely to maintain a stable role. The Russia-Ukraine war did not appear to significantly affect the energy mix in terms of natural gas usage for electricity generation but may impose possible accelerating effects on renewables deployment. However, the renewables generation growth rate is expected to slow down in 2025, which may be effected by other variables that are not examined in this study. 
 
-Lucy: (Conclusion - Renewables)
-
-Ayoung: Limitations and Further Analysis 
+## Limitations and Further Analysis 
 
 One limitation of this study is that it focused solely on the electricity mix component of natural gas usage, excluding its role in heating, which accounts for approximately 44% of Germany’s imported natural gas consumption. This omission likely contributed to the observed minor changes in natural gas usage, as the impact on the electricity sector alone may not fully capture the broader implications of shifts in energy policy or geopolitical events.
 
 For future research, it is recommended to conduct a comprehensive analysis of the heating sector, where more significant changes in natural gas usage are anticipated. Additionally, future studies should expand the scope to include an analysis of the overall electricity mix, incorporating other energy sources and relevant parameters to provide a more holistic understanding of the energy system.
 
 Furthermore, it is suggested that future research explore forecasting not only the quantities of natural gas and renewable energy but also their price dynamics. This would provide deeper insights into market behavior and inform energy policy planning more effectively.
-
-**AI was used to check grammar
-
-
 
 ## References 
 Maliszewska-Nienartowicz, J. (2024). Impact of Russia's invasion of Ukraine on renewable energy development in Germany and Italy. Utilities Policy, 87, 101731.
